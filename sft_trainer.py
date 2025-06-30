@@ -9,6 +9,7 @@ from transformers import (
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from evaluate import evaluate_model
 import os
 
 output_dir = "./finetuned_qwen"
@@ -20,7 +21,7 @@ class SFT:
         self.pad_token = pad_token
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-
+        self.evaluate_model = evaluate_model
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -104,7 +105,7 @@ class SFT:
             def truncate(example):
                 for key in ["input_ids", "completion_mask"]:
                     if key in example:
-                        example[key] = example[key][:512]
+                        example[key] = example[key][:256]
                 return example
             dataset = dataset.map(truncate)
 
@@ -146,7 +147,7 @@ class SFT:
 
                 # Evaluate after each epoch
             if eval_dataset is not None:
-                self.evaluate_model(eval_dataset, data_collator, batch_size)
+                evaluate_model(self.model, eval_dataset, data_collator, batch_size)
                 self.model.train()  # Switch back to training mode
 
             # Save model after training
