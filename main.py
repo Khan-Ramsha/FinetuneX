@@ -5,7 +5,7 @@ from inference import infer
 
 def main():
     dataset = load_dataset("philschmid/dolly-15k-oai-style", split="train")
-    dataset = dataset.select(range(200))
+    dataset = dataset.select(range(70))
 
     print("\n" + "=" * 50)
     print("PREPARING TRAINING AND TESTING DATA")
@@ -21,7 +21,7 @@ def main():
     test_data = sft.prepare_dataset(dataset= test_data, packing= True)
     collator = DataCollator(pad_token_id=sft.tokenizer.pad_token_id, completion_only_loss= True)
 
-    sft.train_model(tokenized_data, collator, batch_size=4, epochs = 3, learning_rate = 5e-5, eval_dataset=test_data)
+    sft.train_model(tokenized_data, collator, batch_size=2, epochs = 3, learning_rate = 5e-5, eval_dataset=test_data, gradient_accumulation_steps=4)
 
     print("\n" + "=" * 50)
     print("DATA PREPARED FOR MODEL TRAINING & MODEL TRAINING STARTS")

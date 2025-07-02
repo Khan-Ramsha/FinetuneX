@@ -111,7 +111,7 @@ class SFT:
 
         return dataset
 
-    def train_model(self, dataset, data_collator, batch_size, epochs, learning_rate, eval_dataset):
+    def train_model(self, dataset, data_collator, batch_size, epochs, learning_rate, eval_dataset, gradient_accumulation_steps):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.model.to(device)
         self.model.train()
@@ -120,24 +120,27 @@ class SFT:
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
 
         for epoch in range(epochs):
-            progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}") #tqdm shows visualization (progress bar) start from epoch 1
             total_loss = 0.0
             num_batches = 0
 
-            for batch in progress:
+            for step, batch in enumerate(progress):
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 labels = batch["labels"].to(device)
 
                 outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                 loss = outputs.loss
+                loss = loss / gradient_accumulation_steps
                 loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+                if ((step + 1) % gradient_accumulation_steps == 0):
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    optimizer.step()
+                    optimizer.zero_grad()
                 print(f"Loss: {loss}")
-                total_loss += loss.item()
+                total_loss += loss.item() * gradient_accumulation_steps
                 num_batches += 1
-                progress.set_postfix(loss=loss.item())
+                progress.set_postfix(loss=loss.item() * gradient_accumulation_steps)
 
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
