@@ -31,84 +31,69 @@ class SFT:
         print(f"PAD token ID: {self.tokenizer.pad_token_id}")
 
     def prepare_dataset(self, dataset, packing):
-        def tokenize(example, tokenizer, dataset_text_field):
-            messages = example["messages"]
+        def tokenize(example, tokenizer):
+            messages = example["messages"] # multiple lists of dicts
 
-            try:
-                # Get user messages with generation prompt
-                user_messages = []
-                for msg in messages:
-                    user_messages.append(msg)
-                    if msg["role"] == "user":
-                        break
-                
-                print(f"Messages: {messages}")
-                print(f"User Messages: {user_messages}")
-                
-                user_part_ids = tokenizer.apply_chat_template(
-                    user_messages,
-                    add_generation_prompt=True,
-                    return_tensors=None
-                )
+            assistant_idx = next((i for i, m in enumerate(messages) if m["role"] == "assistant"), None)
+            if assistant_idx is None:
+                raise ValueError("No assistant message found!")
+            
+            user_prompt = messages[:assistant_idx]
+            full_convo = messages[:assistant_idx + 1]
 
-                full_input_ids = tokenizer.apply_chat_template(
-                    messages,
-                    add_generation_prompt=False,
-                    return_tensors=None
-                )
+            user_prompt_ids = tokenizer.apply_chat_template(
+                user_prompt,
+                tokenize = True,
+                add_generation_prompt = True,
+                return_tensors = None
+            )
+            full_convo_ids = tokenizer.apply_chat_template(
+                full_convo,
+                tokenize = True,
+                add_generation_prompt = False,
+                return_tensors = None
+            )
 
-                if full_input_ids[-1] != tokenizer.eos_token_id:
-                    full_input_ids.append(tokenizer.eos_token_id)
+            # add EOS
+            if full_convo_ids[-1] != self.tokenizer.eos_token_id:
+                full_convo_ids.append(self.tokenizer.eos_token_id)
+            
+            completion_mask = [0] * len(user_prompt_ids) + [1] * (len(full_convo_ids) - len(user_prompt_ids))
 
-                completion_mask = [0] * len(full_input_ids)
-                assistant_start = len(user_part_ids)
-
-                if assistant_start >= len(full_input_ids):
-                    assistant_start = len(full_input_ids) - 1
-
-                for i in range(assistant_start, len(full_input_ids)):
-                    completion_mask[i] = 1
-
-                print(f"User prompt length: {len(user_part_ids)}, Completion length(Model to be trained on): {sum(completion_mask)}, Full Length: {len(full_input_ids)}")
-                return {
-                    "input_ids": full_input_ids,
-                    "completion_mask": completion_mask
-                }
-
-            except Exception as e:
-                print(f"Tokenization failed: {e}")
-                input_ids = tokenizer.apply_chat_template(
-                    messages,
-                    add_generation_prompt=False,
-                    return_tensors=None
-                )
-
-                if input_ids[-1] != tokenizer.eos_token_id:
-                    input_ids.append(tokenizer.eos_token_id)
-
-                completion_mask = [1] * len(input_ids)  # Fallback: train on everything
-                
-                return {
-                    "input_ids": input_ids,
-                    "completion_mask": completion_mask
-                }
-
+            if(sum(completion_mask) == 0):
+                print(f"Prompt Ids: {tokenizer.decode(user_prompt_ids)}")
+                print(f"Full Conversation Ids: {tokenizer.decode(full_convo_ids)}")
+                raise ValueError("No completion tokens to learn from!")
+            
+            assert len(full_convo_ids) == len(completion_mask), "Length Mismatch!"
+            print(f"User prompt length: {len(user_prompt_ids)}, Completion length(Model to be trained on): {sum(completion_mask)}, Full Length: {len(full_convo_ids)}, Completion mask length: {len(completion_mask)}")
+            return {
+                "input_ids": full_convo_ids,
+                "completion_mask": completion_mask
+            }
         dataset = dataset.map(
             tokenize,
             fn_kwargs={
-                "tokenizer": self.tokenizer,
-                "dataset_text_field": "content"
+                "tokenizer": self.tokenizer
             }
         )
-
         if packing:
             def truncate(example):
+                max_len = 250
+                if(example["input_ids"] > max_len):
+                    # need to truncate
+                    start_idx = next((i for i,m in enumerate(example["completion_mask"]) if m == 1), None)
+                    if start_idx is not None:
+                        # keep atleast some completion tokens, min 10
+                        mini = min(10, len(example["input_ids"] - start_idx))
+                        max_len = max(max_len, start_idx + mini)
+
                 for key in ["input_ids", "completion_mask"]:
                     if key in example:
-                        example[key] = example[key][:256]
+                        example[key] = example[key][:max_len]
+                if(sum(example["completion_mask"]) == 0):
+                    raise ValueError("Truncation removed all completion tokens")
                 return example
-            dataset = dataset.map(truncate)
-
         return dataset
 
     def train_model(self, dataset, data_collator, batch_size, epochs, learning_rate, eval_dataset, gradient_accumulation_steps):

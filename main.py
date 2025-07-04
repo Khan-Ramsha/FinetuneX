@@ -5,7 +5,7 @@ from inference import infer
 
 def main():
     dataset = load_dataset("philschmid/dolly-15k-oai-style", split="train")
-    dataset = dataset.select(range(70))
+    dataset = dataset.select(range(1000))
 
     print("\n" + "=" * 50)
     print("PREPARING TRAINING AND TESTING DATA")
@@ -16,7 +16,7 @@ def main():
     print(f"Training data length: {len(train_data)}")
     print(f"Training data length: {len(test_data)}")
 
-    sft = SFT(model = "Qwen/Qwen2-0.5B", pad_token=0)
+    sft = SFT(model = "Qwen/Qwen2.5-0.5B-Instruct", pad_token=0)
     tokenized_data = sft.prepare_dataset(dataset = train_data, packing = True)
     test_data = sft.prepare_dataset(dataset= test_data, packing= True)
     collator = DataCollator(pad_token_id=sft.tokenizer.pad_token_id, completion_only_loss= True)
