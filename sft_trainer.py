@@ -8,9 +8,10 @@ from transformers import (
 )
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 from evaluate import evaluate_model
+from tqdm import tqdm
 import os
+from accelerate import Accelerator
 
 output_dir = "./finetuned_qwen"
 os.makedirs(output_dir, exist_ok=True)
@@ -22,6 +23,8 @@ class SFT:
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.evaluate_model = evaluate_model
+        self.accelerator = Accelerator(mixed_precision="fp16")
+        self.model.gradient_checkpointing_enable()
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -79,13 +82,14 @@ class SFT:
         )
         if packing:
             def truncate(example):
-                max_len = 250
-                if(example["input_ids"] > max_len):
+                max_len = 200
+                if(len(example["input_ids"]) > max_len):
                     # need to truncate
                     start_idx = next((i for i,m in enumerate(example["completion_mask"]) if m == 1), None)
                     if start_idx is not None:
                         # keep atleast some completion tokens, min 10
-                        mini = min(10, len(example["input_ids"] - start_idx))
+                        remaining = len(example["input_ids"]) - start_idx
+                        mini = min(10, remaining)
                         max_len = max(max_len, start_idx + mini)
 
                 for key in ["input_ids", "completion_mask"]:
@@ -94,53 +98,65 @@ class SFT:
                 if(sum(example["completion_mask"]) == 0):
                     raise ValueError("Truncation removed all completion tokens")
                 return example
+            
+            dataset = dataset.map(truncate)
         return dataset
 
     def train_model(self, dataset, data_collator, batch_size, epochs, learning_rate, eval_dataset, gradient_accumulation_steps):
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model.to(device)
+
         self.model.train()
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
-
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
+        self.model, optimizer, data_loader = self.accelerator.prepare(self.model, optimizer, data_loader)
 
         for epoch in range(epochs):
-            progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}") #tqdm shows visualization (progress bar) start from epoch 1
+            if self.accelerator.is_main_process:
+                progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}") #tqdm shows visualization (progress bar) start from epoch 1
+            else:
+                progress = data_loader
             total_loss = 0.0
             num_batches = 0
 
             for step, batch in enumerate(progress):
-                input_ids = batch["input_ids"].to(device)
-                attention_mask = batch["attention_mask"].to(device)
-                labels = batch["labels"].to(device)
-
-                outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
-                loss = loss / gradient_accumulation_steps
-                loss.backward()
-                if ((step + 1) % gradient_accumulation_steps == 0):
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                input_ids = batch["input_ids"]
+                attention_mask = batch["attention_mask"]
+                labels = batch["labels"]
+                
+                with self.accelerator.accumulate(self.model):
+                    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                    loss = outputs.loss
+                    self.accelerator.backward(loss) #backward pass
+                    if self.accelerator.sync_gradients: #gradient clipping for normalizing gradient values
+                        self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     optimizer.step()
                     optimizer.zero_grad()
-                print(f"Loss: {loss}")
-                total_loss += loss.item() * gradient_accumulation_steps
+                
+                loss_for_logging = self.accelerator.gather(loss.detach()).mean()
+                total_loss += loss_for_logging.item()
                 num_batches += 1
-                progress.set_postfix(loss=loss.item() * gradient_accumulation_steps)
+                
+                if self.accelerator.is_main_process:
+                    progress.set_postfix(loss=loss_for_logging.item())
 
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
 
             avg_epoch_loss = total_loss / num_batches
-            print(f"Epoch {epoch+1} average loss: {avg_epoch_loss:.4f}")
+            self.accelerator.print(f"Epoch {epoch+1} average loss: {avg_epoch_loss:.4f}")
 
                 # Evaluate after each epoch
             if eval_dataset is not None:
-                evaluate_model(self.model, eval_dataset, data_collator, batch_size)
+                self.accelerator.wait_for_everyone()
+                self.model.eval()
+                evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
                 self.model.train()  # Switch back to training mode
 
-            # Save model after training
-        self.model.save_pretrained(output_dir)
-        self.tokenizer.save_pretrained(output_dir)
+        # Save model after training
+        self.accelerator.wait_for_everyone()
+        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        if self.accelerator.is_main_process:
+            unwrapped_model.save_pretrained(output_dir)
+            self.tokenizer.save_pretrained(output_dir)
         
         print("\n" + "=" * 50)
         print("MODEL TRAINING DONE!")
