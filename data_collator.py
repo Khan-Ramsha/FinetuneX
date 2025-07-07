@@ -24,7 +24,7 @@ class DataCollator:
         
         if self.completion_only_loss:
             completion_mask = pad_sequence(completion_mask, batch_first=True, padding_value=0)
-            labels[completion_mask == 0] = -100
+            labels = labels.masked_fill_(completion_mask == 0, -100)
 
         for i, lbl in enumerate(labels):
             valid_tokens = (lbl != -100).sum().item() #tokens to compute loss on
