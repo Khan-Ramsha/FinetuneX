@@ -16,7 +16,7 @@ def evaluate_model(model, dataset, data_collator, batch_size, accelerator):
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             loss = accelerator.gather(outputs.loss).mean()
-            total_loss += outputs.loss.item()
+            total_loss += loss.item()
             num_batches += 1
 
     avg_loss = total_loss / num_batches

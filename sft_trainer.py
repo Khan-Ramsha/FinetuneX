@@ -22,9 +22,9 @@ class SFT:
         self.pad_token = pad_token
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.evaluate_model = evaluate_model
-        self.accelerator = Accelerator(mixed_precision="fp16")
+        self.accelerator = Accelerator(mixed_precision="bf16")
         self.model.gradient_checkpointing_enable()
+        self.model.config.use_cache = False
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -62,7 +62,7 @@ class SFT:
                 full_convo_ids.append(self.tokenizer.eos_token_id)
             
             completion_mask = [0] * len(user_prompt_ids) + [1] * (len(full_convo_ids) - len(user_prompt_ids))
-
+            
             if(sum(completion_mask) == 0):
                 print(f"Prompt Ids: {tokenizer.decode(user_prompt_ids)}")
                 print(f"Full Conversation Ids: {tokenizer.decode(full_convo_ids)}")
@@ -103,7 +103,6 @@ class SFT:
         return dataset
 
     def train_model(self, dataset, data_collator, batch_size, epochs, learning_rate, eval_dataset, gradient_accumulation_steps):
-
         self.model.train()
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
@@ -126,19 +125,20 @@ class SFT:
                     outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                     loss = outputs.loss
                     self.accelerator.backward(loss) #backward pass
-                    if self.accelerator.sync_gradients: #gradient clipping for normalizing gradient values
-                        self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                    
+                if self.accelerator.sync_gradients: #gradient clipping for normalizing gradient values
+                    self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     optimizer.step()
                     optimizer.zero_grad()
                 
-                loss_for_logging = self.accelerator.gather(loss.detach()).mean()
+                loss_for_logging = self.accelerator.gather(outputs.loss.detach()).mean()
                 total_loss += loss_for_logging.item()
                 num_batches += 1
                 
                 if self.accelerator.is_main_process:
                     progress.set_postfix(loss=loss_for_logging.item())
 
-                if torch.cuda.is_available():
+                if step % 10 == 0 and torch.cuda.is_available():
                     torch.cuda.empty_cache()
 
             avg_epoch_loss = total_loss / num_batches
@@ -147,7 +147,6 @@ class SFT:
                 # Evaluate after each epoch
             if eval_dataset is not None:
                 self.accelerator.wait_for_everyone()
-                self.model.eval()
                 evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
                 self.model.train()  # Switch back to training mode
 

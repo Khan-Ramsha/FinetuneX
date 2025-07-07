@@ -11,7 +11,7 @@ def infer(dataset):
     print("="*50)
 
     # Load the fine-tuned model and tokenizer
-    output_dir = "./finetuned_qwen"  
+    output_dir = "/kaggle/working/finetuned_qwen"  
     model = AutoModelForCausalLM.from_pretrained(output_dir)
     tokenizer = AutoTokenizer.from_pretrained(output_dir)
 
@@ -29,7 +29,7 @@ def infer(dataset):
     print("GENERATING RESPONSE")
     print("="*50)
 
-    prompt = "How should I invest my money?"
+    prompt = "What are the 4 oceans on earth"
     print(f"User prompt: {prompt}")
 
     # Prepare messages for chat template
@@ -51,15 +51,15 @@ def infer(dataset):
         outputs = model.generate(
             **inputs,
             max_new_tokens=200,        
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.9,
+            do_sample=False,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
+    outputs = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, outputs)]
 
     # Decode the full response
-    full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    full_response = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
+
     print(f"\nFull response:\n{full_response}")
 
     # Extract only the assistant's response
