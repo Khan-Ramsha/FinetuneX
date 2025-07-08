@@ -6,9 +6,8 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer
 )
-from torch.optim import AdamW
-from torch.utils.data import DataLoader
 from evaluate import evaluate_model
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
 from accelerate import Accelerator
@@ -33,7 +32,7 @@ class SFT:
         print(f"PAD token: {self.tokenizer.pad_token}")
         print(f"PAD token ID: {self.tokenizer.pad_token_id}")
 
-    def prepare_dataset(self, dataset, packing):
+    def prepare_dataset(self, dataset):
         def tokenize(example, tokenizer):
             messages = example["messages"] # multiple lists of dicts
 
@@ -80,32 +79,12 @@ class SFT:
                 "tokenizer": self.tokenizer
             }
         )
-        if packing:
-            def truncate(example):
-                max_len = 200
-                if(len(example["input_ids"]) > max_len):
-                    # need to truncate
-                    start_idx = next((i for i,m in enumerate(example["completion_mask"]) if m == 1), None)
-                    if start_idx is not None:
-                        # keep atleast some completion tokens, min 10
-                        remaining = len(example["input_ids"]) - start_idx
-                        mini = min(10, remaining)
-                        max_len = max(max_len, start_idx + mini)
-
-                for key in ["input_ids", "completion_mask"]:
-                    if key in example:
-                        example[key] = example[key][:max_len]
-                if(sum(example["completion_mask"]) == 0):
-                    raise ValueError("Truncation removed all completion tokens")
-                return example
-            
-            dataset = dataset.map(truncate)
         return dataset
 
     def train_model(self, dataset, data_collator, batch_size, epochs, learning_rate, eval_dataset, gradient_accumulation_steps):
         self.model.train()
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
-        optimizer = AdamW(self.model.parameters(), lr=learning_rate)
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate)
         self.model, optimizer, data_loader = self.accelerator.prepare(self.model, optimizer, data_loader)
 
         for epoch in range(epochs):
@@ -130,6 +109,9 @@ class SFT:
                     self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                     optimizer.step()
                     optimizer.zero_grad()
+
+                if step % 10 == 0:
+                    torch.cuda.empty_cache()
                 
                 loss_for_logging = self.accelerator.gather(outputs.loss.detach()).mean()
                 total_loss += loss_for_logging.item()
@@ -138,12 +120,10 @@ class SFT:
                 if self.accelerator.is_main_process:
                     progress.set_postfix(loss=loss_for_logging.item())
 
-                if step % 10 == 0 and torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-
             avg_epoch_loss = total_loss / num_batches
             self.accelerator.print(f"Epoch {epoch+1} average loss: {avg_epoch_loss:.4f}")
 
+            torch.cuda.empty_cache()
                 # Evaluate after each epoch
             if eval_dataset is not None:
                 self.accelerator.wait_for_everyone()

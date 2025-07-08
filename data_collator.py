@@ -39,17 +39,3 @@ class DataCollator:
             "labels": labels
         }
         return batch
-           
-# collator = DataCollator(pad_token_id = 0, completion_only_loss = True)
-# example = [
-#     {
-#         "input_ids": [101, 2023, 2003, 2307],  
-#         "completion_mask": [0, 0, 1, 1],  
-#     },
-#     {
-#         "input_ids": [101, 2009, 2003, 1037, 2204, 2154],
-#         "completion_mask": [0, 0, 0, 1, 1, 1]
-#     }
-# ]
-# result = collator(example)
-# print(result)
