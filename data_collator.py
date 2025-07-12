@@ -1,3 +1,5 @@
+
+
 import torch
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
@@ -15,12 +17,11 @@ class DataCollator:
 
         if self.completion_only_loss:
             completion_mask = [torch.tensor(e["completion_mask"], dtype=torch.long) for e in examples]
-        
         # Pad it
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=self.pad_token_id)
         attention_mask = pad_sequence(attention_mask, batch_first=True, padding_value=0)
         labels = pad_sequence(labels, batch_first=True, padding_value=-100)
-        
+
         if self.completion_only_loss:
             completion_mask = pad_sequence(completion_mask, batch_first=True, padding_value=0)
             labels = labels.masked_fill_(completion_mask == 0, -100)
@@ -30,8 +31,8 @@ class DataCollator:
             if valid_tokens == 0:
                 print(f"ERROR: Sample {i} has all labels = -100!")
                 raise ValueError(f"Sample {i} has no valid labels for training!")
-            else:
-                print(f"Sample {i}: {valid_tokens} valid tokens out of {len(lbl)}")
+            # else:
+                # print(f"Sample {i}: {valid_tokens} valid tokens out of {len(lbl)}")
 
         batch = {
             "input_ids": input_ids,

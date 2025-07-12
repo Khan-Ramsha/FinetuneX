@@ -20,5 +20,7 @@ def evaluate_model(model, dataset, data_collator, batch_size, accelerator):
             num_batches += 1
 
     avg_loss = total_loss / num_batches
-    accelerator.print(f"Validation Loss: {avg_loss:.4f}")
+    perplexity = torch.exp(torch.tensor(avg_loss)).item()
+    accelerator.print(f"Validation Loss: {avg_loss:.4f}, Perplexity: {perplexity:.4f}")
+
     return avg_loss

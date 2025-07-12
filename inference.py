@@ -11,42 +11,42 @@ def infer():
     print("="*50)
 
     # Load the fine-tuned model and tokenizer
-    output_dir = "/kaggle/working/finetuned_qwen"  
+    output_dir = "/kaggle/working/finetuned_qwen"
     model = AutoModelForCausalLM.from_pretrained(output_dir)
     tokenizer = AutoTokenizer.from_pretrained(output_dir)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
-    model.eval()  
+    model.eval()
     print(f"Model loaded on device: {device}")
-    
+
     print("\n" + "="*50)
     print("GENERATING RESPONSE")
     print("="*50)
 
-    prompt = "List 6 different types of rain in Seattle"
+    prompt="Do cats have nine lives?"
     print(f"User prompt: {prompt}")
 
     # Prepare messages for chat template
     messages = [
-        {"role": "user", "content": prompt} 
+        {"role": "user", "content": prompt}
     ]
 
     chat_input = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
-        add_generation_prompt=True 
+        add_generation_prompt=True
     )
 
     print(f"Chat input: {repr(chat_input)}")
 
-    inputs = tokenizer(chat_input, return_tensors="pt").to(device) #tokenize the prompt 
+    inputs = tokenizer(chat_input, return_tensors="pt").to(device) #tokenize the prompt
     max_new_tokens = model.config.max_position_embeddings - inputs["input_ids"].shape[1]
-    print(max_new_tokens)
+    print(f"Max tokens by qwen2 0.5B: max_new_tokens")
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens = max_new_tokens,
-            temperature = 0.6,
+            temperature = 0.5,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
@@ -56,7 +56,7 @@ def infer():
     full_response = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
 
     print(f"\nFull response:\n{full_response}")
-    
+
     print("\n" + "="*50)
     print("INFERENCE COMPLETE!")
     print("="*50)
