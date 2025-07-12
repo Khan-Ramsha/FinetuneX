@@ -10,6 +10,7 @@ from evaluate import evaluate_model
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
+from early_stopping import EarlyStopping
 from accelerate import Accelerator
 
 output_dir = "./finetuned_qwen"
@@ -78,7 +79,7 @@ class SFT:
         self.model.train()
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
 
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate,weight_decay=0.005) #base learning rate
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate,weight_decay=0.001) #base learning rate
 
         total_steps = epochs * len(data_loader) // gradient_accumulation_steps
         warmup_steps = int(0.1 * total_steps)  # 10% warmup
@@ -101,7 +102,7 @@ class SFT:
         print(f"[Before training] LR = {scheduler.get_last_lr()[0]:.8f}")
 
         global_step = 0
-
+        early_stop = EarlyStopping()
         for epoch in range(epochs):
             if self.accelerator.is_main_process:
                 progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
@@ -156,7 +157,10 @@ class SFT:
             # Evaluation
             if eval_dataset is not None:
                 self.accelerator.wait_for_everyone()
-                evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
+                validation_loss = evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
+                if early_stop.early_stopping(validation_loss):
+                    self.accelerator.print("Early stopping triggered!")
+                    break
                 self.model.train()
 
         # Save model after training
