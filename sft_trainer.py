@@ -6,12 +6,15 @@ from transformers import (
     AutoTokenizer,
     get_cosine_schedule_with_warmup
 )
-from evaluate import evaluate_model
+from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
-from early_stopping import EarlyStopping
 from accelerate import Accelerator
+from early_stopping import EarlyStopping
+from evaluate import evaluate_model
+import matplotlib.pyplot as plt
+import numpy as np
 
 output_dir = "./finetuned_qwen"
 os.makedirs(output_dir, exist_ok=True)
@@ -22,7 +25,7 @@ class SFT:
         self.pad_token = pad_token
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.accelerator = Accelerator(gradient_accumulation_steps = 8, mixed_precision="bf16")
+        self.accelerator = Accelerator(gradient_accumulation_steps=8,mixed_precision="bf16")
         self.model.gradient_checkpointing_enable()
         self.model.config.use_cache = False
         if self.tokenizer.pad_token is None:
@@ -33,6 +36,11 @@ class SFT:
         print(f"PAD token: {self.tokenizer.pad_token}")
         print(f"PAD token ID: {self.tokenizer.pad_token_id}")
 
+        # For tracking learning rate
+        self.lr_history = []
+        self.step_history = []
+        self.training_loss = []
+        self.validation_loss = []
     def prepare_dataset(self, dataset):
         def tokenize(example, tokenizer):
             messages = example["messages"]
@@ -92,6 +100,7 @@ class SFT:
             num_training_steps=total_steps
         )
 
+        # Prepare with accelerator
         self.model, optimizer, data_loader, scheduler = self.accelerator.prepare(
             self.model, optimizer, data_loader, scheduler
         )
@@ -132,13 +141,16 @@ class SFT:
                     global_step += 1
                     current_lr = scheduler.get_last_lr()[0]
 
+                    self.lr_history.append(current_lr)
+                    self.step_history.append(global_step)
+                    
+                    # phase info
                     if self.accelerator.is_main_process:
-                        # phase info
                         if global_step <= warmup_steps:
                             phase = "WARMUP"
                         else:
                             phase = "COSINE DECAY"
-
+    
                         print(f"Epoch {epoch+1}, Step {global_step}, LR: {current_lr:.8f} [{phase}]")
 
                 if step % 10 == 0:
@@ -152,19 +164,26 @@ class SFT:
                     progress.set_postfix(loss=loss_for_logging.item())
 
             avg_epoch_loss = total_loss / num_batches
+            self.training_loss.append(avg_epoch_loss)
             self.accelerator.print(f"Epoch {epoch+1} average loss: {avg_epoch_loss:.4f}")
             torch.cuda.empty_cache()
 
             # Evaluation
             if eval_dataset is not None:
                 self.accelerator.wait_for_everyone()
-                validation_loss = evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
-                if early_stop.early_stopping(validation_loss):
+                loss = evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
+                if early_stop.early_stopping(loss):
                     self.accelerator.print("Early stopping triggered!")
                     break
+                self.validation_loss.append(loss)
                 self.model.train()
 
-        # Save model after training
+        # get plots ready
+        if self.accelerator.is_main_process:
+            self.plot_lr_schedule(warmup_steps, total_steps)
+            self.plot_loss_curves()
+
+        #Save model after training
         self.accelerator.wait_for_everyone()
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         if self.accelerator.is_main_process:
@@ -175,3 +194,57 @@ class SFT:
         print("MODEL TRAINING DONE!")
         print("\n" + "=" * 50)
         print(f"Model saved to {output_dir}")
+        
+    def plot_loss_curves(self):
+        import matplotlib.pyplot as plt
+        epochs = range(1, len(self.training_loss) + 1)
+        
+        plt.figure(figsize=(12, 8))
+        plt.plot(epochs, self.training_loss, 'b-', linewidth=2, marker='o', 
+                label='Training Loss', markersize=6)        
+        plt.plot(epochs, self.validation_loss, 'r-', 
+                 linewidth=2, marker='s',label='Validation Loss', markersize=6)
+        plt.title('Training Progress: Loss Over Time', fontsize=16, fontweight='bold')
+        plt.xlabel('Epoch',fontsize=12)
+        plt.ylabel('Loss',fontsize=12)
+        plt.legend(fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'loss_curves.png'), dpi=300, bbox_inches='tight')
+        
+    def plot_lr_schedule(self, warmup_steps, total_steps):
+        plt.figure(figsize=(12, 6))
+        plt.plot(self.step_history, self.lr_history, linewidth=2, color='green')
+        plt.axvline(x=warmup_steps, color='red', linestyle='--', alpha=0.7, 
+                   label=f'Warmup End (Step {warmup_steps})')
+        
+        plt.xlabel('Training Step')
+        plt.ylabel('Learning Rate')
+        plt.title('Learning Rate Schedule: Warmup + Cosine Decay', fontsize=14, fontweight='bold')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Add annotations
+        plt.text(0.02, 0.98, 'Warmup Phase:\nGradually increase LR', 
+                transform=plt.gca().transAxes, fontsize=10, 
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.7))
+        
+        plt.text(0.6, 0.98, 'Cosine Decay:\nGradually decrease LR', 
+                transform=plt.gca().transAxes, fontsize=10, 
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.7))
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, 'lr_schedule.png'), dpi=300, bbox_inches='tight')
+    
+        # Print some statistics
+        max_lr = max(self.lr_history)
+        min_lr = min(self.lr_history)
+        warmup_end_lr = self.lr_history[warmup_steps-1] if warmup_steps > 0 else self.lr_history[0]
+    
+        print(f"\nLearning Rate Schedule Summary:")
+        print(f"  Max LR: {max_lr:.8f}")
+        print(f"  Min LR: {min_lr:.8f}")
+        print(f"  LR at warmup end: {warmup_end_lr:.8f}")
+        print(f"  Warmup steps: {warmup_steps}")
+        print(f"  Total steps: {total_steps}")
+        print(f"  Actual recorded steps: {len(self.lr_history)}")  
