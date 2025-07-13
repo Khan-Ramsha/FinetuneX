@@ -22,7 +22,7 @@ class SFT:
         self.pad_token = pad_token
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.accelerator = Accelerator(mixed_precision="bf16")
+        self.accelerator = Accelerator(gradient_accumulation_steps = 8, mixed_precision="bf16")
         self.model.gradient_checkpointing_enable()
         self.model.config.use_cache = False
         if self.tokenizer.pad_token is None:
@@ -81,7 +81,8 @@ class SFT:
 
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate,weight_decay=0.001) #base learning rate
 
-        total_steps = epochs * len(data_loader) // gradient_accumulation_steps
+        total_batches = epochs * len(data_loader)
+        total_steps = total_batches // gradient_accumulation_steps
         warmup_steps = int(0.1 * total_steps)  # 10% warmup
 
         # short warmup phase + cosine decay
