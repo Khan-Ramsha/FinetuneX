@@ -1,4 +1,4 @@
-## FinetuneX
+# FinetuneX
 FinetuneX is a powerful, ground-up framework with a platform interface designed to democratize LLM fine-tuning by giving users **complete control** over their model training process. FinetuneX provides an intuitive interface for fine-tuning models on your custom datasets, choosing custom training methods, interacting with your trained models, and downloading them.
 
 FinetuneX allows you to:
