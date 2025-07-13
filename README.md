@@ -11,7 +11,7 @@ FinetuneX allows you to:
 
 FinetuneX is a built-from-scratch framework that provides a platform to ML enthusiasts, developers, and researchers or anyone to easily experiment with and fine-tune models.
 
-## 🚀 Features Roadmap (Work in Progress)
+## Features Roadmap (Work in Progress)
 
 - [ ] **LLM Architecture Support**
   - [x] Qwen2.5-0.5B-Instruct (adding support for more variants soon)
