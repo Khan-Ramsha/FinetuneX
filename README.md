@@ -4,7 +4,7 @@ FinetuneX is a powerful, ground-up framework with a platform interface designed 
 FinetuneX allows you to:
 - Fine-tune models on custom datasets
 - Interface to interact with the fine-tuned model
-- Use multiple LLM architecture support
+- Use multiple LLM architecture 
 - Apply custom training methods with different post-training algorithms (SFT, DPO, PPO, RLOO)
 - Choose extensive fine-tuning capabilities including Full Fine-Tuning, LoRA and QLoRA
 - MultiModal Vision Support
