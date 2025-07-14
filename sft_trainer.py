@@ -172,10 +172,10 @@ class SFT:
             if eval_dataset is not None:
                 self.accelerator.wait_for_everyone()
                 loss = evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
+                self.validation_loss.append(loss)
                 if early_stop.early_stopping(loss):
                     self.accelerator.print("Early stopping triggered!")
                     break
-                self.validation_loss.append(loss)
                 self.model.train()
 
         # get plots ready
