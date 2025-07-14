@@ -41,7 +41,7 @@ def infer():
 
     inputs = tokenizer(chat_input, return_tensors="pt").to(device) #tokenize the prompt
     max_new_tokens = model.config.max_position_embeddings - inputs["input_ids"].shape[1]
-    print(f"Max tokens by qwen2 0.5B: max_new_tokens")
+    print(f"Max tokens by qwen2 0.5B: {max_new_tokens}")
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
