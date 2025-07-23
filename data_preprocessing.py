@@ -3,23 +3,22 @@ from datasets import Dataset
 import pandas as pd
 
 class ChatMLPreprocessor:
-    def __init__(self, path: str, ):
-        self.path = path
+    def __init__(self, data):
+        self.data = data
 
     def convert_to_chatml(self):
-        df = pd.read_csv(self.path)
+        q_col, a_col = list(self.data.columns)
         data = []
-
-        for _,row in df.iterrows():
+        for _,row in self.data.iterrows():
             data.append(
                 {
                     "messages":[
                         {
-                            "content": row["question"],
+                            "content": row[q_col],
                             "role": "user"
                         },
                         {
-                            "content": row["answer"],
+                            "content": row[a_col],
                             "role": "assistant"
                         }
                     ]
@@ -29,6 +28,3 @@ class ChatMLPreprocessor:
         print(data)
         print(type(data))
         return data
-    
-obj = ChatMLPreprocessor("data/chatbot_qna.csv")
-obj.convert_to_chatml()
