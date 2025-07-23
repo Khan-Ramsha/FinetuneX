@@ -5,15 +5,12 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-def infer():
+def infer(prompt, model_path):
     print("\n" + "="*50)
     print("STARTING INFERENCE")
     print("="*50)
-
-    # Load the fine-tuned model and tokenizer
-    output_dir = "/kaggle/working/finetuned_qwen"
-    model = AutoModelForCausalLM.from_pretrained(output_dir)
-    tokenizer = AutoTokenizer.from_pretrained(output_dir)
+    model = AutoModelForCausalLM.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     model.eval()
@@ -23,7 +20,6 @@ def infer():
     print("GENERATING RESPONSE")
     print("="*50)
 
-    prompt="Do cats have nine lives?"
     print(f"User prompt: {prompt}")
 
     # Prepare messages for chat template
@@ -56,6 +52,7 @@ def infer():
     full_response = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
 
     print(f"\nFull response:\n{full_response}")
+    return full_response
 
     print("\n" + "="*50)
     print("INFERENCE COMPLETE!")

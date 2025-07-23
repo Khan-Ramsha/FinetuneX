@@ -1,6 +1,7 @@
 import gradio as gr
 import os, shutil
 from main import main
+from inference import infer
 
 os.makedirs("data", exist_ok=True)
 
@@ -9,7 +10,7 @@ user_selections = {
     "finetune_method": "Full Finetuning",
     "algorithm": "Supervised Finetuning",
     "uploaded_file": None,
-    "training_complete": True,
+    "training_complete": False,
     "finetuned_model_path": None,
 }
 
@@ -36,17 +37,47 @@ def start_training():
 
     if not file:
         return "Please upload a dataset before training."
-    main(file)
-    message = f"""
-    Received Configuration for Fine-tuning
-
+    
+    initial_message = f"""
+    Training Started!
+    
     File: {file}
     Model: {model}
     Method: {method}
     Algorithm: {algo}
-
+    
+    Please wait while training is in progress...
     """
-    return message
+    
+    try:
+        main(file)  # This is where the actual training happens
+        
+        user_selections["finetuned_model_path"] = "/kaggle/working/finetuned_qwen"
+        user_selections["training_complete"] = True
+        
+        final_message = f"""
+        Training Complete! 
+        
+        File: {file}
+        Model: {model}
+        Method: {method}
+        Algorithm: {algo}
+        
+        Your model has been successfully fine-tuned!
+        Check out the Chat and Battle Arena tabs!
+        """
+        return final_message
+        
+    except Exception as e:
+        user_selections["training_complete"] = False
+        error_message = f"""
+        Training Failed! 
+        
+        Error: {str(e)}
+        
+        Please check your dataset and try again.
+        """
+        return error_message
 
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.HTML("<center><h1>FinetuneX: Tune LLMs Your Way</h1></center>")
@@ -88,7 +119,30 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             with gr.Column():
                 start_button = gr.Button("Start Training!")
                 training_status = gr.Textbox(label="Training Status", interactive=False)
-                start_button.click(start_training, None, training_status)
+                
+                def training_with_updates():
+                    result = start_training()
+                    
+                    if user_selections["training_complete"]:
+                        return (
+                            result,  
+                            gr.update(value="Model Ready!"),
+                            gr.update(interactive=True, placeholder="Ask your fine-tuned model anything..."),  
+                            gr.update(interactive=True),  
+                            gr.update(value="Models ready for comparison!"), 
+                            gr.update(interactive=True, placeholder="Ask both models the same question to compare..."), 
+                            gr.update(interactive=True)  
+                        )
+                    else:
+                        return (
+                            result, 
+                            gr.update(value="Training incomplete. Please try again."), 
+                            gr.update(interactive=False),  
+                            gr.update(interactive=False),  
+                            gr.update(value="Training incomplete. Please complete training first."), 
+                            gr.update(interactive=False),  
+                            gr.update(interactive=False)  
+                        )
     
     with gr.Tab("Chat"):
         with gr.Column():
@@ -102,7 +156,6 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             
             chatbot = gr.Chatbot(
                 label="Your Fine-tuned Model",
-                type="messages",
                 height=400,
                 placeholder="Complete training first to start chatting with your fine-tuned model..."
             )
@@ -112,22 +165,27 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 placeholder="Ask your fine-tuned model anything...",
                 interactive=False
             )
-            def update_inference_tab():
-                if user_selections["training_complete"]:
-                    return (
-                        f"Model Ready!",
-                        gr.update(interactive=True),
-                        gr.update(placeholder="Ask your fine-tuned model anything...")
-                    )
-                else:
-                    return (
-                        "Please complete training first to use the chat interface.",
-                        gr.update(interactive=False),
-                        gr.update(placeholder="Complete training first to start chatting...")
-                    )
-            demo.load(
-                update_inference_tab,
-                outputs=[model_status, msg, chatbot]
+            send_button = gr.Button("Send", interactive=False)
+            
+            def chat_with_model(history, user_message):
+                if not user_message or not user_selections["training_complete"]:
+                    return history, ""
+                
+                model_path = user_selections["finetuned_model_path"]
+                response = f"Response from fine-tuned model: {infer(user_message, model_path)}"  
+                history.append((user_message, response))
+                return history, ""
+            
+            send_button.click(
+                chat_with_model,
+                inputs=[chatbot, msg],
+                outputs=[chatbot, msg]
+            )
+            
+            msg.submit(
+                chat_with_model,
+                inputs=[chatbot, msg],
+                outputs=[chatbot, msg]
             )
 
     with gr.Tab("Battle Arena"):  
@@ -153,18 +211,45 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                         height=350,
                         placeholder="Fine-tuned model responses will appear here..."
                     )
+            
             compare_msg = gr.Textbox(
                 label="Message to both models",
                 placeholder="Ask both models the same question to compare...",
                 interactive=False
             )
-            def update_chat():
-                if user_selections["training_complete"]:
-                    return (
-                        gr.update(interactive = True),
-                        gr.update(placeholder = "Compare!")
-                    )
-                else:
-                    gr.update(interactive = False) 
+                   
+            compare_button = gr.Button("Compare", interactive=False)
+            
+            def compare_models(history_base, history_finetune, prompt):
+                if not prompt or not user_selections["training_complete"]:
+                    return history_base, history_finetune, ""
+            
+                base_model_path = "Qwen/Qwen2.5-0.5B-Instruct"
+                finetuned_model_path = user_selections["finetuned_model_path"]
+            
+                base_resp = f"Base model response: {infer(prompt, base_model_path)}" 
+                finetuned_resp = f"Fine-tuned model response: {infer(prompt, finetuned_model_path)}"  
+            
+                history_base.append((prompt, base_resp))
+                history_finetune.append((prompt, finetuned_resp))
+                return history_base, history_finetune, ""
+            
+            compare_button.click(
+                compare_models,
+                inputs=[base_chatbot, finetuned_chatbot, compare_msg],
+                outputs=[base_chatbot, finetuned_chatbot, compare_msg]
+            )
+            
+            compare_msg.submit(
+                compare_models,
+                inputs=[base_chatbot, finetuned_chatbot, compare_msg],
+                outputs=[base_chatbot, finetuned_chatbot, compare_msg]
+            )
+
+    start_button.click(
+        training_with_updates,
+        inputs=None,
+        outputs=[training_status, model_status, msg, send_button, comparison_status, compare_msg, compare_button]
+    )
 
 demo.launch()
