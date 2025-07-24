@@ -31,3 +31,9 @@ FinetuneX is a built-from-scratch framework that provides a platform to ML enthu
   - [ ] Direct Preference Optimization (DPO)
   - [ ] Proximal Policy Optimization (PPO)
   - [ ] REINFORCE Leave-One-Out (RLOO)
+
+Demo:
+
+
+https://github.com/user-attachments/assets/e8c26301-79b9-41a6-9808-bd3bc27a3426
+
