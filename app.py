@@ -52,7 +52,7 @@ def start_training():
     try:
         main(file)  # This is where the actual training happens
         
-        user_selections["finetuned_model_path"] = "/kaggle/working/finetuned_qwen"
+        user_selections["finetuned_model_path"] = "/finetuned_qwen"
         user_selections["training_complete"] = True
         
         final_message = f"""
@@ -80,8 +80,8 @@ def start_training():
         return error_message
 
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.HTML("<center><h1>FinetuneX: Tune LLMs Your Way</h1></center>")
-    gr.Markdown("<center><h2> Upload your dataset and get a fine-tuned LLM that understands your needs.. </h2></center>")
+    gr.HTML("<center><h2>FinetuneX: Tune LLMs Your Way</h2></center>")
+    gr.Markdown("<center><h3> Upload your dataset and get a fine-tuned LLM that understands your needs.. </h3></center>")
     
     with gr.Tab("Train & Monitor"):
         with gr.Row():

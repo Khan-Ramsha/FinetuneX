@@ -1,5 +1,4 @@
 from sft_trainer import SFT
-from inference import infer
 from data_collator import DataCollator
 import pandas as pd
 from datasets import Dataset
