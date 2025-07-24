@@ -52,7 +52,7 @@ def start_training():
     try:
         main(file)  # This is where the actual training happens
         
-        user_selections["finetuned_model_path"] = "/finetuned_qwen"
+        user_selections["finetuned_model_path"] = "./finetuned_qwen"
         user_selections["training_complete"] = True
         
         final_message = f"""
