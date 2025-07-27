@@ -13,12 +13,14 @@ import os
 from accelerate import Accelerator
 from evaluate import evaluate_model
 from early_stopping import EarlyStopping
+from sft_config import SFTConfig
 
 output_dir = "./finetuned_qwen"
 os.makedirs(output_dir, exist_ok=True)
 
 class SFT:
-    def __init__(self, model: str, pad_token: int):
+    def __init__(self, model: str, pad_token: int, args: SFTConfig):
+        self.args = args
         self.model_name = model
         self.pad_token = pad_token
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
@@ -80,13 +82,13 @@ class SFT:
         dataset = dataset.map(tokenize, fn_kwargs={"tokenizer": self.tokenizer})
         return dataset
 
-    def train_model(self, dataset, data_collator, batch_size, epochs, learning_rate, eval_dataset, gradient_accumulation_steps):
+    def train_model(self, dataset, data_collator, batch_size, eval_dataset, gradient_accumulation_steps):
         self.model.train()
         data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
 
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate,weight_decay=0.001) #base learning rate
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.args.learning_rate,weight_decay=self.args.weight_decay) #base learning rate
 
-        total_batches = epochs * len(data_loader)
+        total_batches = self.args.epochs * len(data_loader)
         total_steps = total_batches // gradient_accumulation_steps
         warmup_steps = int(0.1 * total_steps)  # 10% warmup
 
@@ -105,14 +107,14 @@ class SFT:
         # Print scheduler info
         print(f"Total training steps: {total_steps}")
         print(f"Warmup steps: {warmup_steps}")
-        print(f"Base learning rate: {learning_rate}")
+        print(f"Base learning rate: {self.args.learning_rate}")
         print(f"[Before training] LR = {scheduler.get_last_lr()[0]:.8f}")
 
         global_step = 0
         early_stop = EarlyStopping()
-        for epoch in range(epochs):
+        for epoch in range(self.args.epochs):
             if self.accelerator.is_main_process:
-                progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
+                progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{self.args.epochs}")
             else:
                 progress = data_loader
 
