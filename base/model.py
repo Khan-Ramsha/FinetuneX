@@ -1,0 +1,1 @@
+""" Base class: every model inherits base class"""

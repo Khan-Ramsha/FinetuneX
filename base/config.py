@@ -1,0 +1,1 @@
+""" config structure for all models & variants"""
