@@ -11,6 +11,9 @@ FinetuneX allows you to:
 
 FinetuneX is a built-from-scratch framework that provides a platform to ML enthusiasts, developers, and researchers or anyone to easily experiment with and fine-tune models.
 
+Implementation Note:
+While building FinetuneX, I’m actively referring to open-source code from Hugging Face. However, all core components have been re-implemented in a simplified way. 
+
 ## Features Roadmap (Work in Progress)
 
 - [ ] **LLM Architecture Support**
