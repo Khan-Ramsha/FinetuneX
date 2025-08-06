@@ -21,7 +21,7 @@ class RotaryEmbedding(nn.Module):
         x_odd  = x[..., 1::2]
         rotated_x1 = x_even * cos - x_odd * sin
         rotated_x2 = x_even * sin + x_odd * cos
-        # Interleave (putting back in order)
+        # Interleave (putting back in o rder)
         x_rot = torch.zeros_like(x)
         x_rot[..., ::2] = rotated_x1
         x_rot[..., 1::2] = rotated_x2
