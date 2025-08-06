@@ -37,9 +37,9 @@ class MultiHeadAttention(nn.Module):
         #scaled dot-product
         att_scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.headD)
         mask = torch.tril(torch.ones(T,T)).unsqueeze(0).unsqueeze(0)
-        att_scores = att_scores.masked_fill_(mask == 9, float("-inf"))
+        att_scores = att_scores.masked_fill_(mask == 0, float("-inf"))
         att_probs = F.softmax(att_scores, dim = -1)
         att_scores = att_probs @ v
         output = att_scores.transpose(1, 2).contiguous().view(B, T, D)
-        output = self.output_proj(output)
+        output = self.output_proj(output) #linear transformation to extract useful info from output
         return output, present_kv
