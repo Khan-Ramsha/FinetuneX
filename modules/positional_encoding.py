@@ -8,7 +8,7 @@ import torch.nn as nn
     - Apply 2D rotation to each pair of dimensions
 """
 class RotaryEmbedding(nn.Module):
-    def __init__(self, dim, base = 10000):
+    def __init__(self, dim, base = 10000): #TODO: base value to be used from model config "rope_theta"
         super().__init__()
         self.dim = dim
         self.base = base # base frequency

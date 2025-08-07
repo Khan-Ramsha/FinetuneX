@@ -6,7 +6,7 @@ formula: ai' = ai/RMS(a) * gi
 """
 import torch
 import torch.nn as nn
-
+# TODO: eps value to be used from model config
 class RMSNorm(nn.Module):
     def __init__(self, hidden_size: int, eps: float = 1e-6):
         super().__init__()
