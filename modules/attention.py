@@ -27,22 +27,23 @@ class MultiHeadAttention(nn.Module):
         k = k.view(B, -1, self.num_head_kv, self.headD).transpose(1,2)
         v = v.view(B, -1, self.num_head_kv, self.headD).transpose(1,2)
         
-        present_kv = (k,v)
         if past_kv is not None:
             past_k, past_v = past_kv
             #Concatenate 
             k = torch.cat((past_k, k), dim = 2)
             v = torch.cat((past_v, v), dim = 2)
-            present_kv = (k,v)
+        present_kv = (k,v)
         # repeating kv heads to match query head
         k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
         v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
         #scaled dot-product
         att_scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.headD)
-        mask = torch.tril(torch.ones(T,T)).unsqueeze(0).unsqueeze(0)
-        att_scores = att_scores.masked_fill_(mask == 0, float("-inf"))
-        att_probs = F.softmax(att_scores, dim = -1)
-        att_scores = att_probs @ v
-        output = att_scores.transpose(1, 2).contiguous().view(B, T, D)
+        q_len = q.size(-2)
+        k_len = k.size(-2)
+        mask = torch.tril(torch.ones(q_len, k_len),device=att_scores.device, dtype=att_scores.dtype).unsqueeze(0).unsqueeze(0)
+        att_weights = att_scores.masked_fill_(mask == 0, float("-inf"))
+        att_probs = F.softmax(att_weights, dim = -1)
+        output = att_probs @ v
+        output = output.transpose(1, 2).contiguous().view(B, T, D)
         output = self.output_proj(output) #linear transformation to extract useful info from output
         return output, present_kv # present_kv will be the past_kv for next steps (during inference only)
