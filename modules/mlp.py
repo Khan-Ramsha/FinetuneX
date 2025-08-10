@@ -1,4 +1,4 @@
-"""SwiGLU (activation function) in MLP"""
+"""SwiGLU (activation function) in Gated MLP"""
 import torch
 import torch.nn as nn
 
