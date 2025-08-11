@@ -24,7 +24,7 @@ class GroupQueryAttention(nn.Module):
         self.output_proj = nn.Linear(self.headD * self.num_head_q, dim, bias=False)
         self.rotary = RotaryEmbedding(self.headD)
 
-    def forward(self, x, past_kv = None, attention_mask = None):
+    def forward(self, x, attention_mask = None):
         B, T, D = x.shape
         q = self.to_q(x) #linear transformation, x@Wq + b (Wq learnable weight for query)
         k = self.to_k(x)
@@ -38,14 +38,7 @@ class GroupQueryAttention(nn.Module):
         #rotate key, query
         q = self.rotary(q)
         k = self.rotary(k)
-
-        #kv caching
-        if past_kv is not None:
-            past_k, past_v = past_kv
-            #Concatenate 
-            k = torch.cat((past_k, k), dim = 2)
-            v = torch.cat((past_v, v), dim = 2)
-        present_kv = (k,v)
+        
         # repeating kv heads to match query head
         k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
         v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
@@ -70,4 +63,4 @@ class GroupQueryAttention(nn.Module):
         )
         output = att_output.transpose(1, 2).contiguous().view(B, T, D)
         output = self.output_proj(output) #linear transformation to extract useful info from output 
-        return output, present_kv # present_kv will be the past_kv for next steps (during inference only)
+        return output
