@@ -66,7 +66,7 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
   - Gradient accumulation steps = 8 with batch size = 1 (avoid CUDA OOM)
   - `self.model.gradient_checkpointing_enable()` (reduces CUDA memory usage)
   - Uses Accelerator for Distributed Training
-    - [Launch distributed training from Jupyter notebook](https://huggingface.co/docs/accelerate/en/basic_tutorials/notebook) [Notebook](https://github.com/huggingface/notebooks/blob/main/examples/accelerate_examples/simple_cv_example.ipynb)
+    - [Launch distributed training from Jupyter notebook](https://huggingface.co/docs/accelerate/en/basic_tutorials/notebook). [Checkout Notebook](https://github.com/huggingface/notebooks/blob/main/examples/accelerate_examples/simple_cv_example.ipynb)
     - [Launch accelerator script](https://huggingface.co/docs/accelerate/en/basic_tutorials/launch)
 
 > FinetuneX is **Research-Oriented** - built with experimentation in mind
