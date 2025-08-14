@@ -37,24 +37,29 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
 | :------ | :---------: |
 | CSV | `question`, `answer` columns |
 > Note:
-> `question` -> user query
+> `question` -> user query,
 > `answer` -> assistant response.
+
 > User-uploaded data is automatically converted to **ChatML** format - same as the [Dolly](https://huggingface.co/datasets/philschmid/dolly-15k-oai-style) style dataset from huggingface
 
 ## Quickstart Guide:
 - Install dependencies
+
   ``` bash
      pip install requirements.txt
   ```
 - Run `app.py`
-``` bash
-     python app.py
-```
+
+    ``` bash
+          python app.py
+    ```
 - Configure Hyperparameter for training: (below are default values)
     - `learning_rate` = 1e-5 , `epochs` = 5, `weight_decay` = 0.001
   Edit `main.py` ->  SFT_Config() to customize
+  
 - Model Variants:
   - Add config for more variants of Qwen or LLama models in `base/config.py`
+
 - Training Details
   - Cosine decay Learning Rate schedular with short warmup phase
   - Gradient clipping enabled
