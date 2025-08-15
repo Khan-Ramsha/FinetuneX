@@ -1,6 +1,16 @@
 # FinetuneX
-FinetuneX is a ground-up framework with a platform interface designed to democratize LLM fine-tuning - built entirely from scratch, including core architecture implementations (Rotary Position Embeddings, RMSNorm, custom attention layers) for models like Qwen, LLaMA, and more to come.
 
+FinetuneX is a ground-up framework with a platform interface designed to democratize LLM fine-tuning by giving users **complete control** over their model training process with an  interface for fine-tuning models on your custom datasets, choosing custom training methods, interacting with your fine-tuned models. 
+Built entirely from scratch, including core architecture implementations (Rotary Position Embeddings, RMSNorm, custom attention layers) for models like Qwen, LLaMA, and more to come.
+
+## Key Features include:
+
+-  Fine-tune models on custom datasets
+- Interface to interact with the fine-tuned model
+- Use multiple LLM architecture 
+- Apply custom training methods with different post-training algorithms (SFT, DPO, PPO, RLOO)
+- Choose extensive fine-tuning capabilities including Full Fine-Tuning, LoRA and QLoRA
+  
 It’s designed for researchers, ML enthusiasts, and developers who want full control over the training process while keeping things modular and extensible.
 
 > While FinetuneX references research papers and open-source code from Hugging Face, all core training and architecture modules are implemented independently for transparency and learning.
