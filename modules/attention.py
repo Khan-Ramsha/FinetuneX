@@ -11,24 +11,25 @@ import math
 from positional_encoding import RotaryEmbedding
 
 class GroupQueryAttention(nn.Module):
-    def __init__(self, dim, num_head_q, num_head_kv):
+    def __init__(self, dim, num_head_q, num_head_kv, layer_idx = 0):
         super().__init__()
+        self.layer_idx = layer_idx
         self.dim = dim
         self.num_head_q = num_head_q
         self.num_head_kv = num_head_kv
         self.headD = dim // num_head_q
         assert self.headD * self.num_head_q == self.dim
-        self.to_q = nn.Linear(dim, self.headD * self.num_head_q, bias = True)
-        self.to_k = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
-        self.to_v = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
-        self.output_proj = nn.Linear(self.headD * self.num_head_q, dim, bias=False)
+        self.q_proj = nn.Linear(dim, self.headD * self.num_head_q, bias = True)
+        self.k_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
+        self.v_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
+        self.o_proj = nn.Linear(self.headD * self.num_head_q, dim, bias=False)
         self.rotary = RotaryEmbedding(self.headD)
 
-    def forward(self, x, attention_mask = None):
+    def forward(self, x, position_emb,  attention_mask = None):
         B, T, D = x.shape
-        q = self.to_q(x) #linear transformation, x@Wq + b (Wq learnable weight for query)
-        k = self.to_k(x)
-        v = self.to_v(x)
+        q = self.q_proj(x) #linear transformation, x@Wq + b (Wq learnable weight for query)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
         # q, k, v each of [B, T, D] but since multiple heads D is to be split num_head_q * head_dim
         #reshape  => [B, T, H, Hd] & transpose [B,T,H, Hd] => [B, H, T, Hd]
         q = q.view(B, -1, self.num_head_q, self.headD).transpose(1,2)
@@ -36,9 +37,9 @@ class GroupQueryAttention(nn.Module):
         v = v.view(B, -1, self.num_head_kv, self.headD).transpose(1,2)
         
         #rotate key, query
-        q = self.rotary(q)
-        k = self.rotary(k)
-        
+        cos, sin = position_emb
+        q, k= self.rotary.apply_rotary_emb(q, k, cos, sin)
+
         # repeating kv heads to match query head
         k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
         v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
@@ -62,5 +63,5 @@ class GroupQueryAttention(nn.Module):
             is_causal=is_causal
         )
         output = att_output.transpose(1, 2).contiguous().view(B, T, D)
-        output = self.output_proj(output) #linear transformation to extract useful info from output 
+        output = self.o_proj(output) #linear transformation to extract useful info from output 
         return output

@@ -16,21 +16,28 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("inv_freq", inv_freq)
         print(f"Inverse Frequency: {inv_freq}")
     
-    def apply_rotation(self, x, cos, sin):
-        x_even = x[..., ::2]
-        x_odd  = x[..., 1::2]
-        rotated_x1 = x_even * cos - x_odd * sin
-        rotated_x2 = x_even * sin + x_odd * cos
-        # Interleave (putting back in order)
-        x_rot = torch.zeros_like(x)
-        x_rot[..., ::2] = rotated_x1
-        x_rot[..., 1::2] = rotated_x2
-        return x_rot
+    def rotate_half(self,x):
+        x1 = x[..., : x.shape[-1] // 2]
+        x2 = x[..., x.shape[-1] // 2 :]
+        return torch.cat((-x2, x1), dim = -1)
+
+    def apply_rotary_emb(self, q, k, cos, sin):
+        q_emb = (q * cos) + (self.rotate_half(q) * sin)
+        k_emb = (k * cos) + (self.rotate_half(k) * sin)
+        return q_emb, k_emb
     
-    def forward(self, x):
+    def forward(self, x, position_ids = None):
         *p, seq_len, dim = x.shape
-        t = torch.arange(seq_len, device=x.device).type_as(self.inv_freq) # positions
+        if position_ids is not None:
+            # Use provided position_ids
+            seq_len = position_ids.shape[-1]
+            t = position_ids.float().type_as(self.inv_freq)
+        else:
+            t = torch.arange(seq_len, device=x.device).type_as(self.inv_freq) # positions
         freqs = torch.einsum('i,j->ij', t, self.inv_freq) # t @ inv_freq (matmul)
-        cos = freqs.cos()[None, :, :]
-        sin = freqs.sin()[None, :, :]
-        return self.apply_rotation(x,cos,sin)
+        emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
+        cos = emb.cos()
+        sin = emb.sin()
+        cos = cos[None, None, :, :]
+        cos = cos[None, None, :, :] # to match [B, H, seq_len, head_dim]
+        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
