@@ -30,14 +30,19 @@ class RotaryEmbedding(nn.Module):
         *p, seq_len, dim = x.shape
         if position_ids is not None:
             # Use provided position_ids
-            seq_len = position_ids.shape[-1]
-            t = position_ids.float().type_as(self.inv_freq)
+            if position_ids.dim() > 1:
+                t = position_ids[0].float().type_as(self.inv_freq) 
+            else: 
+                t = position_ids.float().type_as(self.inv_freq) 
         else:
             t = torch.arange(seq_len, device=x.device).type_as(self.inv_freq) # positions
+        print(f"t shape: {t.shape}, inv_freq shape: {self.inv_freq.shape}")
+        print(f"t: {t}")
+        print(f"inv_freq: {self.inv_freq}")
         freqs = torch.einsum('i,j->ij', t, self.inv_freq) # t @ inv_freq (matmul)
         emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
         cos = emb.cos()
         sin = emb.sin()
         cos = cos[None, None, :, :]
-        cos = cos[None, None, :, :] # to match [B, H, seq_len, head_dim]
+        sin = sin[None, None, :, :] # to match [B, H, seq_len, head_dim]
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)

@@ -13,7 +13,7 @@ class Config:
     num_key_value_heads : int = 2
     vocab_size : int = 151936
     max_position_embeddings : int = 32768 # max seq len
-    tie_word_embeddings : True
+    tie_word_embeddings : bool = True
 
     _available_models = []
 
@@ -51,7 +51,9 @@ qwen2_variants = [
         num_hidden_layers = 28,
         num_key_value_heads = 2,
         vocab_size = 151936,
-        max_position_embeddings = 131072
+        max_position_embeddings = 131072,
+        tie_word_embeddings = True
+
 
     ),
 
@@ -65,7 +67,9 @@ qwen2_variants = [
         num_hidden_layers = 28,
         num_key_value_heads = 2,
         vocab_size = 151936,
-        max_position_embeddings = 32768
+        max_position_embeddings = 32768,
+        tie_word_embeddings = True
+
 
     )    
 ]
@@ -81,7 +85,9 @@ llama_variants = [
         num_hidden_layers = 28,
         num_key_value_heads = 2,
         vocab_size = 151936,
-        max_position_embeddings = 32768 # max seq len
+        max_position_embeddings = 32768, # max seq len
+        tie_word_embeddings = True
+
 
     ),
     dict(
@@ -94,7 +100,8 @@ llama_variants = [
         num_hidden_layers = 28,
         num_key_value_heads = 2,
         vocab_size = 151936,
-        max_position_embeddings = 32768 
+        max_position_embeddings = 32768,
+        tie_word_embeddings = True
 
     )    
 ]

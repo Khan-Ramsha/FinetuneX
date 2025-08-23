@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from positional_encoding import RotaryEmbedding
+from finetunex.modules.positional_encoding import RotaryEmbedding
 
 class GroupQueryAttention(nn.Module):
     def __init__(self, dim, num_head_q, num_head_kv, layer_idx = 0):
