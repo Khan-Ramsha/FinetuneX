@@ -11,7 +11,7 @@ import math
 from finetunex.modules.positional_encoding import RotaryEmbedding
 
 class GroupQueryAttention(nn.Module):
-    def __init__(self, dim, num_head_q, num_head_kv, layer_idx = 0):
+    def __init__(self, dim, num_head_q, num_head_kv, rope_theta, layer_idx = 0):
         super().__init__()
         self.layer_idx = layer_idx
         self.dim = dim
@@ -23,7 +23,7 @@ class GroupQueryAttention(nn.Module):
         self.k_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
         self.v_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
         self.o_proj = nn.Linear(self.headD * self.num_head_q, dim, bias=False)
-        self.rotary = RotaryEmbedding(self.headD)
+        self.rotary = RotaryEmbedding(self.headD, rope_theta)
 
     def forward(self, x, position_emb,  attention_mask = None):
         B, T, D = x.shape

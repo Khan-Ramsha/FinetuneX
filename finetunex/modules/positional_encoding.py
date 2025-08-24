@@ -8,13 +8,13 @@ import torch.nn as nn
     - Apply 2D rotation to each pair of dimensions
 """
 class RotaryEmbedding(nn.Module):
-    def __init__(self, dim, base = 10000): #TODO: base value to be used from model config "rope_theta"
+    def __init__(self, dim, rope_theta): 
         super().__init__()
         self.dim = dim
-        self.base = base # base frequency
-        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+        self.base = rope_theta # base frequency
+        inv_freq = 1.0 / (rope_theta ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer("inv_freq", inv_freq)
-        print(f"Inverse Frequency: {inv_freq}")
+        # print(f"Inverse Frequency: {inv_freq}")
     
     def rotate_half(self,x):
         x1 = x[..., : x.shape[-1] // 2]
