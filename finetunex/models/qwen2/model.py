@@ -8,6 +8,7 @@ from finetunex.modules.attention import GroupQueryAttention
 from finetunex.modules.norm import RMSNorm
 from finetunex.modules.mlp import MLP
 from finetunex.modules.positional_encoding import RotaryEmbedding
+from torch.utils.checkpoint import checkpoint
 
 class DecoderBlock(nn.Module):
     def __init__(self, config: Config, layer_idx : int):
@@ -23,6 +24,18 @@ class DecoderBlock(nn.Module):
         return x
 
 class Qwen2Model(BaseModel):
+
+    def _build_model(self):
+        self.embed_tokens = nn.Embedding(self.config.vocab_size, self.config.hidden_size) #Token embedding
+        self.layers = nn.ModuleList(
+            [self.decoder_layer(self.config, layer_idx) for layer_idx in range(self.config.num_hidden_layers)]
+        )
+        self.norm = self.norm_layer(self.config.hidden_size, self.config.rms_norm_eps)
+        self.rotary = self.rotary_embedding(self.config.hidden_size // self.config.num_attention_heads, self.config.rope_theta)
+        self.lm_head = nn.Linear(self.config.hidden_size, self.config.vocab_size, bias=False)        
+        
+        if self.config.tie_word_embeddings:
+            self.lm_head.weight = self.embed_tokens.weight #tie embeddings
     
     def rotary_embedding(self, dim, base):
         return RotaryEmbedding(dim, base)
@@ -33,14 +46,38 @@ class Qwen2Model(BaseModel):
     def decoder_layer(self, config, layer_idx):
         return DecoderBlock(config, layer_idx)
     
-    def forward(self, x, attention_mask = None):
-        B, T = x.shape
-        hidden_states = self.embed_tokens(x) 
-        position_ids = torch.arange(T, device=x.device).unsqueeze(0).expand(B, -1)
+    def forward(self, input_ids, attention_mask = None, labels = None):
+        B, T = input_ids.shape
+        hidden_states = self.embed_tokens(input_ids) 
+        position_ids = torch.arange(T, device=input_ids.device).unsqueeze(0).expand(B, -1)
         pos_emb = self.rotary(hidden_states, position_ids)
         # passing hidden states to stack of blocks
         for layer in self.layers:
             hidden_states = layer(hidden_states,pos_emb, attention_mask)
         hidden_states = self.norm(hidden_states)
         logits = self.lm_head(hidden_states)
-        return logits
+        print(f"BEFORE LOSS CALCULATION:")
+        print(f"logits.shape: {logits.shape}")
+        print(f"logits.dim(): {logits.dim()}")
+        
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            try:
+                shift_logits = logits[..., :-1, :].contiguous()
+            except Exception as e:
+                raise e
+                
+            try:
+                shift_labels = labels[..., 1:].contiguous()
+            except Exception as e:
+                raise e
+            loss = loss_fct(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1)
+            )
+            print(f"Calculated loss: {loss}")                         
+        return {
+            'loss': loss,
+            'logits': logits
+        }

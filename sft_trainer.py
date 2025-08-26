@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from finetunex.models.qwen2.save_load import from_pretrained
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     get_cosine_schedule_with_warmup
 )
+from finetunex.base.config import Config
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -14,8 +16,11 @@ from accelerate import Accelerator
 from evaluate import evaluate_model
 from early_stopping import EarlyStopping
 from sft_config import SFTConfig
+from finetunex.models.qwen2.save_load import load_pretrained_weights
+from finetunex.models.qwen2.save_load import save_pretrained
+from finetunex.models.qwen2.model import Qwen2Model
 
-output_dir = "./finetuned_qwen"
+output_dir = "./finetuned"
 os.makedirs(output_dir, exist_ok=True)
 
 class SFT:
@@ -23,11 +28,16 @@ class SFT:
         self.args = args
         self.model_name = model
         self.pad_token = pad_token
-        self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        config = Config.config_from_model(self.model_name)
+        if self.model_name == "Qwen2.5-0.5B":
+            hf_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B") #from hf
+            self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
+            self.model = Qwen2Model(config=config) #self implemented architecture
+        model_state_dict = load_pretrained_weights(self.model, hf_model)
+        self.model.load_state_dict(model_state_dict, strict = True)
         self.accelerator = Accelerator(gradient_accumulation_steps=8,mixed_precision="bf16")
-        self.model.gradient_checkpointing_enable()
-        self.model.config.use_cache = False
+        # self.model.gradient_checkpointing_enable()
+        # self.model.config.use_cache = False
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -128,7 +138,7 @@ class SFT:
 
                 with self.accelerator.accumulate(self.model):
                     outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                    loss = outputs.loss
+                    loss = outputs['loss']
                     self.accelerator.backward(loss)
 
                 if self.accelerator.sync_gradients:
@@ -155,7 +165,7 @@ class SFT:
                 if step % 10 == 0:
                     torch.cuda.empty_cache()
 
-                loss_for_logging = self.accelerator.gather(outputs.loss.detach()).mean()
+                loss_for_logging = self.accelerator.gather(outputs['loss'].detach()).mean()
                 total_loss += loss_for_logging.item()
                 num_batches += 1
 
@@ -179,8 +189,9 @@ class SFT:
         self.accelerator.wait_for_everyone()
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         if self.accelerator.is_main_process:
-            unwrapped_model.save_pretrained(output_dir)
-            self.tokenizer.save_pretrained(output_dir)
+            model_state_dict = unwrapped_model.state_dict()
+            save_pretrained(output_dir, model_state_dict, unwrapped_model.config)
+            # self.tokenizer.save_pretrained(output_dir)
 
         print("\n" + "=" * 50)
         print("MODEL TRAINING DONE!")

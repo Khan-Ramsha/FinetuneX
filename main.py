@@ -4,7 +4,7 @@ import pandas as pd
 from data_preprocessing import ChatMLPreprocessor
 from sft_config import SFTConfig
 
-def main(file):
+def main(file, model):
     data = pd.read_csv(file)
     obj = ChatMLPreprocessor(data)
     data = obj.convert_to_chatml()
@@ -13,7 +13,7 @@ def main(file):
     eval_dataset = train_test_split["test"]
     training_args = SFTConfig()
     sft = SFT(
-        model = "Qwen/Qwen2.5-0.5B-Instruct", 
+        model = model, #user selected model
         pad_token=0,
         args = training_args
     )

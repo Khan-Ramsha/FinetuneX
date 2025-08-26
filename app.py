@@ -1,12 +1,13 @@
 import gradio as gr
 import os, shutil
 from main import main
-from inference import infer
+from inference import infer, infer_base
+import traceback
 
 os.makedirs("data", exist_ok=True)
 
 user_selections = {
-    "model": "Qwen2.5-0.5B Instruct",
+    "model": "Qwen2.5-0.5B",
     "finetune_method": "Full Finetuning",
     "algorithm": "Supervised Finetuning",
     "uploaded_file": None,
@@ -50,9 +51,9 @@ def start_training():
     """
     
     try:
-        main(file)  # This is where the actual training happens
+        main(file, model)  # This is where the actual training happens
         
-        user_selections["finetuned_model_path"] = "./finetuned_qwen"
+        user_selections["finetuned_model_path"] = "./finetuned"
         user_selections["training_complete"] = True
         
         final_message = f"""
@@ -70,11 +71,12 @@ def start_training():
         
     except Exception as e:
         user_selections["training_complete"] = False
+        full_traceback = traceback.format_exc()
         error_message = f"""
         Training Failed! 
         
         Error: {str(e)}
-        
+        StackTrace: {full_traceback}
         Please check your dataset and try again.
         """
         return error_message
@@ -93,8 +95,8 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         with gr.Row():
             with gr.Column():
                 model_choice = gr.Dropdown(
-                    choices=["Qwen2.5-0.5B Instruct", "LLaMA 3.1 (Coming Soon)", "Mistral 7B (Coming Soon)", "Gemma 2 (Coming Soon)"],
-                    value="Qwen2.5-0.5B Instruct",
+                    choices=["Qwen2.5-0.5B", "LLaMA 3.1 (Coming Soon)", "Mistral 7B (Coming Soon)", "Gemma 2 (Coming Soon)"],
+                    value="Qwen2.5-0.5B",
                     label="Model"
                 )
                 model_choice.change(update_model_choice, model_choice)
@@ -172,7 +174,8 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                     return history, ""
                 
                 model_path = user_selections["finetuned_model_path"]
-                response = f"Response from fine-tuned model: {infer(user_message, model_path)}"  
+                selected_model = user_selections["model"]
+                response = f"Response from fine-tuned model: {infer(user_message, model_path, selected_model)}"  
                 history.append((user_message, response))
                 return history, ""
             
@@ -224,10 +227,10 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 if not prompt or not user_selections["training_complete"]:
                     return history_base, history_finetune, ""
             
-                base_model_path = "Qwen/Qwen2.5-0.5B-Instruct"
+                base_model_path = user_selections["model"]
                 finetuned_model_path = user_selections["finetuned_model_path"]
             
-                base_resp = f"Base model response: {infer(prompt, base_model_path)}" 
+                base_resp = f"Base model response: {infer_base(prompt, base_model_path)}" 
                 finetuned_resp = f"Fine-tuned model response: {infer(prompt, finetuned_model_path)}"  
             
                 history_base.append((prompt, base_resp))

@@ -27,7 +27,10 @@ class Config:
                 config_dict.update(kwargs) # custom parameters
                 return cls(**config_dict)
         raise ValueError(f"Unknown Model: {name}")
-
+    @classmethod
+    def from_dict(cls, config_dict):
+        return cls(**config_dict)
+    
 qwen2_variants = [
     dict(
         model_name = "Qwen2.5-0.5B",

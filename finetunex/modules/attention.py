@@ -1,6 +1,6 @@
 """ Group Query Attention """
 """
-This class implements Optimized version of MultiHead Attention with Grouping Query Heads using KV caching when in inference mode
+This class implements Optimized version of MultiHead Attention with Grouping Query Heads
 Rotary Embedding to rotate entire query & key tensors
 Creating causal mask by utilizing scaled_dot_product() from torch - SDPA (Huggingface style)
 """
@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from finetunex.modules.positional_encoding import RotaryEmbedding
+from finetunex.modules.positional_encoding import apply_rotary_emb
 
 class GroupQueryAttention(nn.Module):
     def __init__(self, dim, num_head_q, num_head_kv, rope_theta, layer_idx = 0):
@@ -23,7 +23,6 @@ class GroupQueryAttention(nn.Module):
         self.k_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
         self.v_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
         self.o_proj = nn.Linear(self.headD * self.num_head_q, dim, bias=False)
-        self.rotary = RotaryEmbedding(self.headD, rope_theta)
 
     def forward(self, x, position_emb,  attention_mask = None):
         B, T, D = x.shape
@@ -38,28 +37,30 @@ class GroupQueryAttention(nn.Module):
         
         #rotate key, query
         cos, sin = position_emb
-        q, k= self.rotary.apply_rotary_emb(q, k, cos, sin)
+        q, k= apply_rotary_emb(q, k, cos, sin)
 
         # repeating kv heads to match query head
         k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
         v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
 
-        # causal masking
-        causal_mask = attention_mask
-        if attention_mask is not None: #slicing
-            causal_mask = attention_mask[:, :, :, : k.shape[-2]]
+        # # causal masking
+        # causal_mask = attention_mask
+        # if attention_mask is not None: #slicing
+        #     causal_mask = attention_mask[:, :, :, : k.shape[-2]]
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(dtype = q.dtype, device = q.device)
         #handling non-contiguity of tensors on cuda
         if q.device.type == "cuda" and attention_mask is not None:
             q = q.contiguous()
             k = k.contiguous()
             v = v.contiguous()
         # if attention mask not provided & not during inference, put causal = True
-        is_causal = True if causal_mask is None and T > 1 else False
+        is_causal = True if attention_mask is None and T > 1 else False
         att_output = F.scaled_dot_product_attention(
             q,
             k,
             v,
-            attn_mask=causal_mask,
+            attn_mask=attention_mask,
             is_causal=is_causal
         )
         output = att_output.transpose(1, 2).contiguous().view(B, T, D)

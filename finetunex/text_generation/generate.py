@@ -10,7 +10,8 @@ def generate(model,prompt, max_new_tokens, top_k, top_p, temperature, stop_token
     tokens = []
     curr = prompt
     for i in range(1, max_new_tokens - T + 1):
-        logits = model(curr)
+        output = model(curr)
+        logits = output['logits']
         new_token = stochastic_sampling(logits, top_k=top_k, top_p=top_p, temp=temperature)
         tokens.append(new_token)
         new_token = new_token.view(1, 1)
