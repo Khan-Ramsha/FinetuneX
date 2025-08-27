@@ -23,9 +23,13 @@ def load_pretrained_weights(model, hf_model): #mapping
         hf_name = f"model.{name}" #make it same as hf naming conventions
         hf_name = hf_name.replace(".attn.", ".self_attn.")
         if hf_name in hfmodel_state_dict:
+            
             model_state_dict[name] = hfmodel_state_dict[hf_name] #manually assigning weights
         else:
-            print(f"Skipping, {hf_name} is not in hf state dict")
+            if(hf_name == "model.lm_head.weight"):
+                print(f"hf_name: {hf_name}")
+                print(f"model state dict name : {model_state_dict[name]}")
+                model_state_dict[name] = hfmodel_state_dict["model.embed_tokens.weight"]
     return model_state_dict # to be loaded and used for infer
 
 def save_pretrained(outputdir, model_state_dict, config):
@@ -46,3 +50,4 @@ def from_pretrained(model_path): #load the model after finetuning
     state_dict = torch.load(weights_path)
     model.load_state_dict(state_dict, strict=False)
     return model
+print(load_pretrained_weights(model, hf_model))

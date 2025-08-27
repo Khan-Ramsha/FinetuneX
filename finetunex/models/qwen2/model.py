@@ -2,7 +2,6 @@
 import torch
 import torch.nn as nn
 from finetunex.base.model import BaseModel
-from finetunex.models.qwen2 import modell
 from finetunex.base.config import Config
 from finetunex.modules.attention import GroupQueryAttention
 from finetunex.modules.norm import RMSNorm
@@ -56,18 +55,15 @@ class Qwen2Model(BaseModel):
             hidden_states = layer(hidden_states,pos_emb, attention_mask)
         hidden_states = self.norm(hidden_states)
         logits = self.lm_head(hidden_states)
-        print(f"BEFORE LOSS CALCULATION:")
-        print(f"logits.shape: {logits.shape}")
-        print(f"logits.dim(): {logits.dim()}")
         
         loss = None
         if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
+            loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
             try:
                 shift_logits = logits[..., :-1, :].contiguous()
             except Exception as e:
                 raise e
-                
+            
             try:
                 shift_labels = labels[..., 1:].contiguous()
             except Exception as e:
@@ -76,7 +72,6 @@ class Qwen2Model(BaseModel):
                 shift_logits.view(-1, shift_logits.size(-1)),
                 shift_labels.view(-1)
             )
-            print(f"Calculated loss: {loss}")                         
         return {
             'loss': loss,
             'logits': logits

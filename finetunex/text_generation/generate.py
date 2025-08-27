@@ -1,29 +1,24 @@
 import torch
 from finetunex.text_generation.decoding import stochastic_sampling
-@torch.inference_mode()
-def generate(model,prompt, max_new_tokens, top_k, top_p, temperature, stop_tokens):
-    if prompt.ndim == 1:
-        prompt = prompt.unsqueeze(0)
-    T = prompt.size(1) #seq len
-    buffer_len = max((len(tokens) for tokens in stop_tokens), default = 1)
-    yield_i = 0
-    tokens = []
-    curr = prompt
-    for i in range(1, max_new_tokens - T + 1):
-        output = model(curr)
-        logits = output['logits']
-        new_token = stochastic_sampling(logits, top_k=top_k, top_p=top_p, temp=temperature)
-        tokens.append(new_token)
-        new_token = new_token.view(1, 1)
-        print(f"curr shape: {curr.shape}")
-        print(f"new_token after view(1,1): {new_token.shape}")  
-        print(f"new_token after unsqueeze(0): {new_token.unsqueeze(0).shape}")
-        curr = torch.cat((curr, new_token), dim = -1)
-        for st in stop_tokens:
-            l = len(st)
-            if l <= len(tokens):
-                if all(a == b for a, b in zip(tokens[-l:], st)):
-                    return
-        if i - yield_i >= buffer_len:
-            yield from tokens[yield_i:i]
-            yield_i = i
+
+def generate(model, inputs, max_new_tokens, top_p, top_k, temperature, stop_tokens):
+    if inputs.dim() == 1:
+        inputs = inputs.unsqueeze(0)
+    batch, input_len = inputs.shape
+    max_tokens = model.config.max_position_embeddings
+    max_new_tokens = min(max_new_tokens, max_tokens - input_len - 10)
+    curr_sequence = inputs
+    generated = []
+    for _ in range(max_new_tokens):
+        if curr_sequence.size(1) >= max_tokens - 1:
+            keep_len = max_tokens // 2
+            curr_sequence = curr_sequence[:, -keep_len:]
+
+        output = model(curr_sequence)
+        logits = output['logits'][:, -1, :]
+        next_token = stochastic_sampling(logits, temperature, top_k, top_p)
+        if next_token.item() in stop_tokens:
+            break
+        generated.append(next_token.item())
+        curr_sequence = torch.cat([curr_sequence, next_token], dim=1)
+    return generated
