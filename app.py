@@ -229,9 +229,9 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             
                 base_model_path = user_selections["model"]
                 finetuned_model_path = user_selections["finetuned_model_path"]
-            
+                selected_model = user_selections["model"]
                 base_resp = f"Base model response: {infer_base(prompt, base_model_path)}" 
-                finetuned_resp = f"Fine-tuned model response: {infer(prompt, finetuned_model_path)}"  
+                finetuned_resp = f"Fine-tuned model response: {infer(prompt, finetuned_model_path, selected_model)}"  
             
                 history_base.append((prompt, base_resp))
                 history_finetune.append((prompt, finetuned_resp))
