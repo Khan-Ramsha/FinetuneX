@@ -27,21 +27,23 @@ def infer(prompt, model_path, model_name):
     )
     
     inputs = tokenizer(chat_input, return_tensors="pt").to(device)
-    inputs = inputs["input_ids"]
+    prompt = inputs["input_ids"]
     max_new_tokens = 250
     
     with torch.no_grad():
-        outputs = generate(
+        generated_tokens = generate(
             model,
-            inputs,
-            max_new_tokens=max_new_tokens,
-            top_p=0.8,  # Slightly higher for more diversity
-            top_k=50,   # Lower for more focused responses
-            temperature=0.7,  # More balanced temperature
+            prompt,
+            max_new_tokens = max_new_tokens,
+            context_size = model.config.max_position_embeddings,
+            temperature = 0.7, 
+            top_k = 50,  
+            top_p = 0.8, 
             stop_tokens=[tokenizer.eos_token_id]  # Pass as list, not tuple
         )
-    response = tokenizer.decode(outputs)
-    return response
+    generated_text = tokenizer.decode(generated_tokens[0].tolist())
+    response = generated_text.split('<|im_start|>assistant\n')[-1]
+    return response.strip()
 
 def infer_base(prompt, model_path):
     print("\n" + "="*50)

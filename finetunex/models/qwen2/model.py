@@ -17,7 +17,7 @@ class DecoderBlock(nn.Module):
         self.post_attention_layernorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.mlp = MLP(config)
     
-    def forward(self, x,pos_emb=None, attention_mask = None):
+    def forward(self, x, pos_emb, attention_mask):
         x = x + self.attn(self.input_layernorm(x), pos_emb, attention_mask)
         x = x + self.mlp(self.post_attention_layernorm(x))
         return x
@@ -45,17 +45,21 @@ class Qwen2Model(BaseModel):
     def decoder_layer(self, config, layer_idx):
         return DecoderBlock(config, layer_idx)
     
-    def forward(self, input_ids, attention_mask = None, labels = None):
+    def forward(self, input_ids, labels = None):
         B, T = input_ids.shape
         hidden_states = self.embed_tokens(input_ids) 
         position_ids = torch.arange(T, device=input_ids.device).unsqueeze(0).expand(B, -1)
         pos_emb = self.rotary(hidden_states, position_ids)
+        
+        num_tokens = hidden_states.shape[1]
+        attention_mask = torch.triu(torch.ones(num_tokens, num_tokens, device=hidden_states.device, dtype=torch.bool), diagonal=1)
+        attention_mask = attention_mask[None, None, :, :] #broadcasting
         # passing hidden states to stack of blocks
         for layer in self.layers:
-            hidden_states = layer(hidden_states,pos_emb, attention_mask)
+            hidden_states = layer(hidden_states, pos_emb, attention_mask)
         hidden_states = self.norm(hidden_states)
         logits = self.lm_head(hidden_states)
-        
+
         loss = None
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss(ignore_index=-100)

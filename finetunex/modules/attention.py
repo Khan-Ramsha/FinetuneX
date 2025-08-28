@@ -24,7 +24,7 @@ class GroupQueryAttention(nn.Module):
         self.v_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
         self.o_proj = nn.Linear(self.headD * self.num_head_q, dim, bias=False)
 
-    def forward(self, x, position_emb,  attention_mask = None):
+    def forward(self, x, position_emb,  attention_mask):
         B, T, D = x.shape
         q = self.q_proj(x) #linear transformation, x@Wq + b (Wq learnable weight for query)
         k = self.k_proj(x)
@@ -42,27 +42,8 @@ class GroupQueryAttention(nn.Module):
         # repeating kv heads to match query head
         k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
         v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
-
-        # # causal masking
-        # causal_mask = attention_mask
-        # if attention_mask is not None: #slicing
-        #     causal_mask = attention_mask[:, :, :, : k.shape[-2]]
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(dtype = q.dtype, device = q.device)
-        #handling non-contiguity of tensors on cuda
-        if q.device.type == "cuda" and attention_mask is not None:
-            q = q.contiguous()
-            k = k.contiguous()
-            v = v.contiguous()
-        # if attention mask not provided & not during inference, put causal = True
-        is_causal = True if attention_mask is None and T > 1 else False
-        att_output = F.scaled_dot_product_attention(
-            q,
-            k,
-            v,
-            attn_mask=attention_mask,
-            is_causal=is_causal
-        )
-        output = att_output.transpose(1, 2).contiguous().view(B, T, D)
-        output = self.o_proj(output) #linear transformation to extract useful info from output 
-        return output
+        attn_scores = q @ k.transpose(2, 3)  # (b, n_heads, q_len, k_len)
+        attn_scores = attn_scores.masked_fill(attention_mask, float("-inf"))
+        attn_weights = torch.softmax(attn_scores / self.headD **0.5, dim=-1)
+        context = (attn_weights @ v).transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)
+        return self.o_proj(context)

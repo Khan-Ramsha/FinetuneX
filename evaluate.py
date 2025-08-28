@@ -14,7 +14,7 @@ def evaluate_model(model, dataset, data_collator, batch_size, accelerator):
             attention_mask = batch["attention_mask"]
             labels = batch["labels"]
 
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            outputs = model(input_ids=input_ids, labels=labels)
             loss = accelerator.gather(outputs['loss']).mean()
             total_loss += loss.item()
             num_batches += 1

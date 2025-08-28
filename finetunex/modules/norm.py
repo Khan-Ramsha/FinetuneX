@@ -14,5 +14,8 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(hidden_size)) # 'g' learnable vector using Parameter from torch - enable gradient computation during backward pass
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        rms = x.pow(2).mean(dim=-1,keepdim=True).sqrt()
-        return self.weight * (x / (rms + self.eps))
+        x_type = x.dtype
+        x = x.to(torch.float32)
+        variance = x.pow(2).mean(-1, keepdim=True)
+        norm_x = x * torch.rsqrt(variance + self.eps)
+        return self.weight * norm_x.to(x_type)
