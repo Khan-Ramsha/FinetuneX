@@ -7,7 +7,7 @@ class SFTConfig:
         metadata={"help":"base learning rate for optimizer"}
     )
     epochs: int = field(
-        default=5, 
+        default=3, 
         metadata={"help":"number of times model sees training data"}
     )
     weight_decay:float = field(

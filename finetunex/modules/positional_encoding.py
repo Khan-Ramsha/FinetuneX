@@ -12,7 +12,7 @@ class RotaryEmbedding(nn.Module):
         super().__init__()
         self.dim = dim
         self.rope_theta = rope_theta # base frequency
-        inv_freq = 1.0 / (self.rope_theta ** (torch.arange(0, dim, 2, dtype=torch.float, device="cuda") / dim))
+        inv_freq = 1.0 / (self.rope_theta ** (torch.arange(0, dim, 2, dtype=torch.float) / dim))
         self.register_buffer("inv_freq", inv_freq)
 
     def forward(self, x, position_ids = None):

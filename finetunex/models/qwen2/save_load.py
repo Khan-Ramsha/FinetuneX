@@ -14,24 +14,6 @@ hf_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B") #from hf
 config = Config.config_from_model("Qwen2.5-0.5B")
 model = Qwen2Model(config=config) #self implemented architecture
 
-def load_pretrained_weights(model, hf_model): #mapping
-    model_state_dict = model.state_dict()
-    hfmodel_state_dict = hf_model.state_dict()
-    for name, params in list(model_state_dict.items()):
-        if "rotary.inv_freq" in name:
-            continue #skip it
-        hf_name = f"model.{name}" #make it same as hf naming conventions
-        hf_name = hf_name.replace(".attn.", ".self_attn.")
-        if hf_name in hfmodel_state_dict:
-            
-            model_state_dict[name] = hfmodel_state_dict[hf_name] #manually assigning weights
-        else:
-            if(hf_name == "model.lm_head.weight"):
-                print(f"hf_name: {hf_name}")
-                print(f"model state dict name : {model_state_dict[name]}")
-                model_state_dict[name] = hfmodel_state_dict["model.embed_tokens.weight"]
-    return model_state_dict # to be loaded and used for infer
-
 def save_pretrained(outputdir, model_state_dict, config):
     os.makedirs(outputdir, exist_ok=True)
     torch.save(model_state_dict, os.path.join(outputdir, "model.bin")) #saving trained weights
@@ -50,4 +32,90 @@ def from_pretrained(model_path): #load the model after finetuning
     state_dict = torch.load(weights_path)
     model.load_state_dict(state_dict, strict=False)
     return model
-print(load_pretrained_weights(model, hf_model))
+
+def load_weights_into_qwen(model, config, hf_model_state_dict):
+ 
+    def assign(left, right, tensor_name="unknown"):
+        if left.shape != right.shape:
+            raise ValueError(f"Shape mismatch in tensor '{tensor_name}'. Left: {left.shape}, Right: {right.shape}")
+        return torch.nn.Parameter(right.clone().detach() if isinstance(right, torch.Tensor) else torch.tensor(right))
+    
+    model.embed_tokens.weight = assign(model.embed_tokens.weight, hf_model_state_dict['model.embed_tokens.weight'], "model.embed_tokens.weight")
+
+    for l in range(config.num_hidden_layers):
+        block = model.layers[l]
+        att = block.attn
+        
+        # Q, K, V projections
+        att.q_proj.weight = assign(
+            att.q_proj.weight,
+            hf_model_state_dict[f"model.layers.{l}.self_attn.q_proj.weight"],
+            f"model.layers.{l}.self_attn.q_proj.weight"
+        )
+        att.k_proj.weight = assign(
+            att.k_proj.weight,
+            hf_model_state_dict[f"model.layers.{l}.self_attn.k_proj.weight"],
+            f"model.layers.{l}.self_attn.k_proj.weight"
+        )
+        att.v_proj.weight = assign(
+            att.v_proj.weight,
+            hf_model_state_dict[f"model.layers.{l}.self_attn.v_proj.weight"],
+            f"model.layers.{l}.self_attn.v_proj.weight"
+        )
+
+        # Output projection
+        att.o_proj.weight = assign(
+            att.o_proj.weight,
+            hf_model_state_dict[f"model.layers.{l}.self_attn.o_proj.weight"],
+            f"model.layers.{l}.self_attn.o_proj.weight"
+        )
+        att.q_proj.bias = assign(
+            att.q_proj.bias,
+            hf_model_state_dict[f"model.layers.{l}.self_attn.q_proj.bias"],
+            f"model.layers.{l}.self_attn.q_proj.bias"
+        )
+        att.v_proj.bias = assign(
+            att.v_proj.bias,
+            hf_model_state_dict[f"model.layers.{l}.self_attn.v_proj.bias"],
+            f"model.layers.{l}.self_attn.v_proj.bias"
+        )
+        att.k_proj.bias = assign(
+            att.k_proj.bias,
+            hf_model_state_dict[f"model.layers.{l}.self_attn.k_proj.bias"],
+            f"model.layers.{l}.self_attn.k_proj.bias"
+        )
+                # Attention layernorm
+        model.layers[l].input_layernorm.weight = assign(
+            model.layers[l].input_layernorm.weight,
+            hf_model_state_dict[f"model.layers.{l}.input_layernorm.weight"],
+            f"model.layers.{l}.input_layernorm.weight"
+        )
+        model.layers[l].mlp.gate_proj.weight = assign(
+                model.layers[l].mlp.gate_proj.weight,
+                hf_model_state_dict[f"model.layers.{l}.mlp.gate_proj.weight"],
+                f"model.layers.{l}.mlp.gate_proj.weight"
+            )
+        model.layers[l].mlp.up_proj.weight = assign(
+            model.layers[l].mlp.up_proj.weight,
+            hf_model_state_dict[f"model.layers.{l}.mlp.up_proj.weight"],
+            f"model.layers.{l}.mlp.up_proj.weight"
+        )
+        model.layers[l].mlp.down_proj.weight = assign(
+            model.layers[l].mlp.down_proj.weight,
+            hf_model_state_dict[f"model.layers.{l}.mlp.down_proj.weight"],
+            f"model.layers.{l}.mlp.down_proj.weight"
+        )
+
+        model.layers[l].post_attention_layernorm.weight = assign(
+            model.layers[l].post_attention_layernorm.weight,
+            hf_model_state_dict[f"model.layers.{l}.post_attention_layernorm.weight"],
+            f"model.layers.{l}.post_attention_layernorm.weight"
+        )
+    model.norm.weight = assign(model.norm.weight, hf_model_state_dict["model.norm.weight"], "model.norm.weight")
+
+    if "lm_head.weight" in hf_model_state_dict:
+        model.lm_head.weight = assign(model.lm_head.weight, hf_model_state_dict["lm_head.weight"], "lm_head.weight")
+    else:
+        # Model uses tie embedding, hence assigning token embeddings 
+        print("Model uses weight tying.")
+        model.lm_head.weight = assign(model.lm_head.weight, hf_model_state_dict["model.embed_tokens.weight"], "model.embed_tokens.weight")

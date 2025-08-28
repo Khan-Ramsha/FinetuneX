@@ -16,12 +16,13 @@ from accelerate import Accelerator
 from evaluate import evaluate_model
 from early_stopping import EarlyStopping
 from sft_config import SFTConfig
-from finetunex.models.qwen2.save_load import load_pretrained_weights
+from finetunex.models.qwen2.save_load import load_weights_into_qwen
 from finetunex.models.qwen2.save_load import save_pretrained
 from finetunex.models.qwen2.model import Qwen2Model
 
 output_dir = "./finetuned"
 os.makedirs(output_dir, exist_ok=True)
+
 
 class SFT:
     def __init__(self, model: str, pad_token: int, args: SFTConfig):
@@ -31,10 +32,10 @@ class SFT:
         config = Config.config_from_model(self.model_name)
         if self.model_name == "Qwen2.5-0.5B":
             hf_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B") #from hf
+            hf_model_state_dict = hf_model.state_dict()
             self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
             self.model = Qwen2Model(config=config) #self implemented architecture
-        model_state_dict = load_pretrained_weights(self.model, hf_model)
-        self.model.load_state_dict(model_state_dict, strict = True)
+        load_weights_into_qwen(self.model, config, hf_model_state_dict)
         self.accelerator = Accelerator(gradient_accumulation_steps=8,mixed_precision="bf16")
         # self.model.gradient_checkpointing_enable()
         # self.model.config.use_cache = False
