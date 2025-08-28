@@ -11,7 +11,8 @@ def generate(model, idx, max_new_tokens, context_size, temperature ,top_k, top_p
             output = model(model_input)
             logits = output['logits']
             next_idx = stochastic_sampling(logits, temperature, top_k, top_p)
-            idx = torch.cat([idx, next_idx], dim=1)
             if next_idx.item() in stop_tokens:
                 break
+            idx = torch.cat([idx, next_idx], dim=1)
+
     return idx

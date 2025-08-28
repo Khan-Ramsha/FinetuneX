@@ -28,7 +28,7 @@ def infer(prompt, model_path, model_name):
     
     inputs = tokenizer(chat_input, return_tensors="pt").to(device)
     prompt = inputs["input_ids"]
-    max_new_tokens = 250
+    max_new_tokens = model.config.max_position_embeddings - prompt.size(1)
     
     with torch.no_grad():
         generated_tokens = generate(
@@ -39,7 +39,7 @@ def infer(prompt, model_path, model_name):
             temperature = 0.7, 
             top_k = 50,  
             top_p = 0.8, 
-            stop_tokens=[tokenizer.eos_token_id]  # Pass as list, not tuple
+            stop_tokens=[tokenizer.eos_token_id] 
         )
     generated_text = tokenizer.decode(generated_tokens[0].tolist())
     response = generated_text.split('<|im_start|>assistant\n')[-1]
