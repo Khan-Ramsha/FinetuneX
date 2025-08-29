@@ -1,8 +1,3 @@
-""""This file includes:
-    1) load_pretrained_weights => loading and mapping pretrained weights from hf
-
-
-"""
 import os
 import torch
 import json
@@ -33,7 +28,7 @@ def from_pretrained(model_path): #load the model after finetuning
     model.load_state_dict(state_dict, strict=False)
     return model
 
-def load_weights_into_qwen(model, config, hf_model_state_dict):
+def load_weights_into_qwen(model, config, hf_model_state_dict): #loading and mapping pretrained weights from hf
  
     def assign(left, right, tensor_name="unknown"):
         if left.shape != right.shape:

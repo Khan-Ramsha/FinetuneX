@@ -1,8 +1,3 @@
-""""This file includes:
-    1) load_pretrained_weights => loading and mapping pretrained weights from hf
-
-
-"""
 import os
 import torch
 import json
