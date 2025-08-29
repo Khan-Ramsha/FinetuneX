@@ -95,7 +95,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         with gr.Row():
             with gr.Column():
                 model_choice = gr.Dropdown(
-                    choices=["Qwen2.5-0.5B", "LLaMA 3.1 (Coming Soon)", "Mistral 7B (Coming Soon)", "Gemma 2 (Coming Soon)"],
+                    choices=["Qwen2.5-0.5B", "Llama-3.2-1B", "Mistral 7B (Coming Soon)", "Gemma 2 (Coming Soon)"],
                     value="Qwen2.5-0.5B",
                     label="Model"
                 )

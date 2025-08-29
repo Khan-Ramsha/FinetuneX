@@ -62,59 +62,26 @@ qwen2_variants = [
         tie_word_embeddings = True,
         rms_norm_eps = 1e-06,
         rope_theta = 1000000.0
-    ),
-
-    dict(
-        model_name = "Qwen2.5-1.5B-Instruct",
-        model_type= "qwen2",
-        hidden_size =  1536, 
-        hidden_act = "silu",
-        intermediate_size = 8960,
-        num_attention_heads = 12,
-        num_hidden_layers = 28,
-        num_key_value_heads = 2,
-        vocab_size = 151936,
-        max_position_embeddings = 32768,
-        tie_word_embeddings = True,
-        rms_norm_eps = 1e-06,
-        rope_theta = 1000000.0
-
-    )    
+    )  
 ]
 
 llama_variants = [
     dict(
-        model_name = "",
-        model_type= "",
-        hidden_size =  1536, 
+        model_name = "Llama-3.2-1B",
+        model_type= "llama",
+        hidden_size =  2048, 
         hidden_act = "silu",
-        intermediate_size = 8960,
-        num_attention_heads = 12,
-        num_hidden_layers = 28,
-        num_key_value_heads = 2,
-        vocab_size = 151936,
-        max_position_embeddings = 32768, # max seq len
+        intermediate_size = 8192,
+        num_attention_heads = 32,
+        num_hidden_layers = 16,
+        num_key_value_heads = 8,
+        vocab_size = 128256,
+        max_position_embeddings = 131072, # max seq len
         tie_word_embeddings = True,
-        rms_norm_eps = 1e-06,
-        rope_theta = 1000000.0
+        rms_norm_eps = 1e-05,
+        rope_theta = 500000.0
 
-    ),
-    dict(
-        model_name = "",
-        model_type= "",
-        hidden_size =  1536, 
-        hidden_act = "silu",
-        intermediate_size = 8960,
-        num_attention_heads = 12,
-        num_hidden_layers = 28,
-        num_key_value_heads = 2,
-        vocab_size = 151936,
-        max_position_embeddings = 32768,
-        tie_word_embeddings = True,
-        rms_norm_eps = 1e-06,
-        rope_theta = 1000000.0
-
-    )    
+    )   
 ]
 
 Config._available_models.extend(qwen2_variants)

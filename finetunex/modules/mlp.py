@@ -11,6 +11,6 @@ class MLP(nn.Module):
         self.down_proj = nn.Linear(config.intermediate_size, config.hidden_size, bias=False)
         self.silu = nn.SiLU()
 
-    def forward(self, x):
+    def forward(self, x):   
         x = self.down_proj(self.silu(self.gate_proj(x)) * self.up_proj(x))
-        return x
+        return x    

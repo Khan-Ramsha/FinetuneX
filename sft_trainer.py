@@ -19,6 +19,8 @@ from sft_config import SFTConfig
 from finetunex.models.qwen2.save_load import load_weights_into_qwen
 from finetunex.models.qwen2.save_load import save_pretrained
 from finetunex.models.qwen2.model import Qwen2Model
+from finetunex.models.llama.model import LlamaModel
+from finetunex.models.llama.save_load import save_pretrained, load_weights_into_llama
 
 output_dir = "./finetuned"
 os.makedirs(output_dir, exist_ok=True)
@@ -35,7 +37,13 @@ class SFT:
             hf_model_state_dict = hf_model.state_dict()
             self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
             self.model = Qwen2Model(config=config) #self implemented architecture
-        load_weights_into_qwen(self.model, config, hf_model_state_dict)
+            load_weights_into_qwen(self.model, config, hf_model_state_dict)
+        if self.model_name == "Llama-3.2-1B":
+            hf_model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B") #from hf
+            hf_model_state_dict = hf_model.state_dict()
+            self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+            self.model = LlamaModel(config=config) #self implemented architecture
+            load_weights_into_llama(self.model, config, hf_model_state_dict)
         self.accelerator = Accelerator(gradient_accumulation_steps=8,mixed_precision="bf16")
         # self.model.gradient_checkpointing_enable()
         # self.model.config.use_cache = False
@@ -61,18 +69,41 @@ class SFT:
             user_prompt = messages[:assistant_idx]
             full_convo = messages[:assistant_idx + 1]
 
-            user_prompt_ids = tokenizer.apply_chat_template(
-                user_prompt,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_tensors=None
-            )
-            full_convo_ids = tokenizer.apply_chat_template(
-                full_convo,
-                tokenize=True,
-                add_generation_prompt=False,
-                return_tensors=None
-            )
+            if self.model_name == "Qwen2.5-0.5B":
+                user_prompt_ids = tokenizer.apply_chat_template(
+                    user_prompt,
+                    tokenize=True,
+                    add_generation_prompt=True,
+                    return_tensors=None
+                )
+                full_convo_ids = tokenizer.apply_chat_template(
+                    full_convo,
+                    tokenize=True,
+                    add_generation_prompt=False,
+                    return_tensors=None
+                )
+            if self.model_name == "Llama-3.2-1B":
+                 # Convert messages to string format for Llama
+                user_prompt_str = ""
+                for msg in user_prompt:
+                    user_prompt_str += f"{msg['role']}: {msg['content']}\n"
+                user_prompt_str += "assistant: "  # Add generation prompt
+                
+                full_convo_str = ""
+                for msg in full_convo:
+                    full_convo_str += f"{msg['role']}: {msg['content']}\n"
+                
+                user_prompt_ids = tokenizer(
+                    user_prompt_str,
+                    return_tensors=None,  
+                    add_special_tokens=True
+                )["input_ids"]
+                
+                full_convo_ids = tokenizer(
+                    full_convo_str,
+                    return_tensors=None,  
+                    add_special_tokens=True
+                )["input_ids"]
 
             if full_convo_ids[-1] != self.tokenizer.eos_token_id:
                 full_convo_ids.append(self.tokenizer.eos_token_id)
