@@ -80,10 +80,10 @@ Both Qwen2 and LLaMA3 models share the same core transformer architecture (with 
     ``` bash
           python app.py
     ```
-- Configure your training hyperparameters (defaults shown below):
-    - `learning_rate` = 1e-5 , `epochs` = 3, `weight_decay` = 0.001
-  Edit `main.py` ->  SFT_Config() to customize
-  
+- Configure your training hyperparameters (defaults shown below)
+    - `learning_rate` = 1e-5 , `epochs` = 3, `weight_decay` = 0.001   
+    - Edit `main.py` ->  SFT_Config() to customize
+        
 - Model Variants:
   - Add config for more variants of Qwen or LLama models in `base/config.py`
 
