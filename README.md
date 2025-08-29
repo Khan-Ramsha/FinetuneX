@@ -19,10 +19,11 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
 ## Features Roadmap (Work in Progress)
 
 - [ ] **LLM Architecture Support** 
-  - [x] Qwen2.5-0.5B-Instruct (adding support for more variants soon)
-  - [ ] Llama 3.1
+  - [x] Qwen2.5 (0.5B & 1.2B)
+  - [x] Llama-3.2-1B
   - [ ] Mistral 7B
-  - [ ] Gemma 2
+  - [ ] Gemma2
+  - [ ] GPT2
 
 - [ ] **Fine-tuning Capabilities**
   - [x] Full Fine-tuning
@@ -43,7 +44,12 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
   - [x] Compare base and tuned model responses
   - [ ] Download the trained weights
 
+## Architecture Details
+<img width="1021" height="504" alt="image" src="https://github.com/user-attachments/assets/dcf7a51b-1426-4537-b599-0adb450adb8f" />
+FinetuneX implements the architecture from scratch in the image above for Qwen2 0.5B and Llama3.2 1B. Qwen2 Follows similar architecture as shown above for Qwen3 but dense model with different configuration parameters (24 layers wider). Have a look at `finetunex/base/config.py`
+
 ## Dataset Support
+#### For (SFT)
 | Format | Required Fields |
 | :------ | :---------: |
 | CSV | `question`, `answer` columns |
@@ -75,7 +81,7 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
   - Cosine decay Learning Rate schedular with short warmup phase
   - Gradient clipping enabled
   - Gradient accumulation steps = 8 with batch size = 1 (avoid CUDA OOM)
-  - `self.model.gradient_checkpointing_enable()` (reduces CUDA memory usage)
+  - Add `self.model.gradient_checkpointing_enable()` (reduces CUDA memory usage)
   - Uses Accelerator for Distributed Training
     - [Launch distributed training from Jupyter notebook](https://huggingface.co/docs/accelerate/en/basic_tutorials/notebook). [Checkout Notebook](https://github.com/huggingface/notebooks/blob/main/examples/accelerate_examples/simple_cv_example.ipynb)
     - [Launch accelerator script](https://huggingface.co/docs/accelerate/en/basic_tutorials/launch)
