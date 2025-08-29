@@ -54,9 +54,8 @@ The architecture for Qwen2 incorporates several key components: Group Query Atte
 
 ### Unified Architecture Design
 Both Qwen2 and LLaMA3 models share the same core transformer architecture (with slight difference in Attention Layer: for Llama no QKV bias) allows to:
-- Use a single codebase for multiple model families
-- Easy extension to new architectures
-- Modular components that can be mixed and matched
+- Core components can be reused across similar architecture.
+- A shared base class inherited by all models makes it easy to extend support for new architectures.
 
 ## Dataset Support
 #### For (SFT)
