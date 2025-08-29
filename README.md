@@ -48,7 +48,7 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
 <img width="1030" height="550" alt="image" src="https://github.com/user-attachments/assets/d7edd961-ed4e-4943-92b2-b5360b6d7906" />
 
 
-FinetuneX implements the architecture from scratch for Qwen2 0.5B and Llama3.2 1B. Qwen2 follows a similar architecture to Qwen3, but with denser configuration (24 layers, wider hidden dimensions). Have a look at  `finetunex/base/config.py` 
+FinetuneX implements the architecture from scratch for Qwen2-0.5B and Llama3.2-1B models. The Qwen2 implementation uses a 24-layer deeper architecture that shares similarities with Qwen3's design but with different parameter configurations. Have a look at  `finetunex/base/config.py` 
 
 The architecture for Qwen2 incorporates several key components: Group Query Attention (GQA), Root Mean Square Normalization (You will find RMSNorm applied at: Pre-Attention Normalization and Post-Attention Normalization), Rotary Positional Encodings for encoding position information, QKV bias in attention mechanism and SwiGLU activation in FeedForward Network. 
 
