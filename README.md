@@ -6,10 +6,10 @@ Built entirely from scratch, FinetuneX implements core architecture from scratch
 
 ## Key Features include:
 
--  Fine-tune models on custom datasets
+- Fine-tune models on custom datasets
 - Interface to interact with the fine-tuned model
-- Use multiple LLM architecture 
-- Apply custom training methods with different post-training algorithms (SFT, DPO, PPO, RLOO)
+- Use multiple LLM architectures
+- Experiment with multiple post-training algorithms (SFT, DPO, PPO, RLOO)
 - Choose extensive fine-tuning capabilities including Full Fine-Tuning, LoRA and QLoRA
   
 It’s designed for researchers, ML enthusiasts, and developers who want full control over the training process while keeping things modular and extensible.
@@ -47,8 +47,10 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
 ## Architecture Details
 <img width="1030" height="550" alt="image" src="https://github.com/user-attachments/assets/d7edd961-ed4e-4943-92b2-b5360b6d7906" />
 
+
 FinetuneX implements the architecture from scratch for Qwen2 0.5B and Llama3.2 1B. Qwen2 Follows similar architecture as shown above for Qwen3 but dense model with different configuration parameters (24 layers wider). Have a look at  `finetunex/base/config.py` 
-The architecture for Qwen2 incorporates several key components: Group Query Attention (GQA), Root Mean Square Normalization (You will find RMSNorm applied at: Pre-Attention Normalization and Post-Attention Normalization), Rotary Positional Encodings for encoding position informations, QKV bias in attention mechanism and SwiGLU activation in FeedForward Network. 
+
+The architecture for Qwen2 incorporates several key components: Group Query Attention (GQA), Root Mean Square Normalization (You will find RMSNorm applied at: Pre-Attention Normalization and Post-Attention Normalization), Rotary Positional Encodings for encoding position information, QKV bias in attention mechanism and SwiGLU activation in FeedForward Network. 
 
 ### Unified Architecture Design
 Both Qwen2 and LLaMA3 models share the same core transformer architecture (with slight difference in Attention Layer: for Llama no QKV bias) allows to:
@@ -71,15 +73,15 @@ Both Qwen2 and LLaMA3 models share the same core transformer architecture (with 
 - Install dependencies
 
   ``` bash
-     pip install requirements.txt
+     pip install -r requirements.txt
   ```
 - Run `app.py`
 
     ``` bash
           python app.py
     ```
-- Configure Hyperparameter for training: (below are default values)
-    - `learning_rate` = 1e-5 , `epochs` = 5, `weight_decay` = 0.001
+- Configure your training hyperparameters (defaults shown below):
+    - `learning_rate` = 1e-5 , `epochs` = 3, `weight_decay` = 0.001
   Edit `main.py` ->  SFT_Config() to customize
   
 - Model Variants:
