@@ -2,7 +2,7 @@
 
 FinetuneX is a ground-up framework with a platform interface designed to democratize LLM fine-tuning by giving users **complete control** over their model training process with an  interface for fine-tuning models on your custom datasets, choosing custom training methods, interacting with your fine-tuned models. 
 
-Built entirely from scratch, FinetuneX implements core architecture (Rotary Position Embeddings, RMSNorm, custom attention layers for models like Qwen, LLaMA, and more to come). It integrates post-training algorithms (SFT, more to come) while keeping the **codebase modular and extensible** for experimentation and future model support.
+Built entirely from scratch, FinetuneX implements core architecture from scratch with support for stochastic sampling (top-p, top-k) text generation techniques. It integrates post-training algorithms (SFT, more to come) while keeping the **codebase modular and extensible** for experimentation and future model support.
 
 ## Key Features include:
 
@@ -35,7 +35,7 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
   - [ ] Direct Preference Optimization (DPO)
   - [ ] Proximal Policy Optimization (PPO)
   - [ ] REINFORCE Leave-One-Out (RLOO)
-
+        
 - [x] **Interface for Inference**
   - [x] Upload your own dataset
   - [x] Select training configs
@@ -45,8 +45,16 @@ It’s designed for researchers, ML enthusiasts, and developers who want full co
   - [ ] Download the trained weights
 
 ## Architecture Details
-<img width="1021" height="504" alt="image" src="https://github.com/user-attachments/assets/dcf7a51b-1426-4537-b599-0adb450adb8f" />
-FinetuneX implements the architecture from scratch in the image above for Qwen2 0.5B and Llama3.2 1B. Qwen2 Follows similar architecture as shown above for Qwen3 but dense model with different configuration parameters (24 layers wider). Have a look at `finetunex/base/config.py`
+<img width="1030" height="550" alt="image" src="https://github.com/user-attachments/assets/d7edd961-ed4e-4943-92b2-b5360b6d7906" />
+
+FinetuneX implements the architecture from scratch for Qwen2 0.5B and Llama3.2 1B. Qwen2 Follows similar architecture as shown above for Qwen3 but dense model with different configuration parameters (24 layers wider). Have a look at  `finetunex/base/config.py` 
+The architecture for Qwen2 incorporates several key components: Group Query Attention (GQA), Root Mean Square Normalization (You will find RMSNorm applied at: Pre-Attention Normalization and Post-Attention Normalization), Rotary Positional Encodings for encoding position informations, QKV bias in attention mechanism and SwiGLU activation in FeedForward Network. 
+
+### Unified Architecture Design
+Both Qwen2 and LLaMA3 models share the same core transformer architecture (with slight difference in Attention Layer: for Llama no QKV bias) allows to:
+- Use a single codebase for multiple model families
+- Easy extension to new architectures
+- Modular components that can be mixed and matched
 
 ## Dataset Support
 #### For (SFT)
