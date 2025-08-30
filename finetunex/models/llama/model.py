@@ -47,18 +47,6 @@ class LlamaModel(BaseModel):
     
     def decoder_layer(self, config, layer_idx):
         return DecoderBlock(config, layer_idx)
-
-    def forward(self, input_ids, labels=None):
-        self.embed_tokens = nn.Embedding(self.config.vocab_size, self.config.hidden_size) #Token embedding
-        self.layers = nn.ModuleList(
-            [self.decoder_layer(self.config, layer_idx) for layer_idx in range(self.config.num_hidden_layers)]
-        )
-        self.norm = self.norm_layer(self.config.hidden_size, self.config.rms_norm_eps)
-        self.rotary = self.rotary_embedding(self.config.hidden_size // self.config.num_attention_heads, self.config.rope_theta)
-        self.lm_head = nn.Linear(self.config.hidden_size, self.config.vocab_size, bias=False)        
-        
-        if self.config.tie_word_embeddings:
-            self.lm_head.weight = self.embed_tokens.weight #tie embeddings
     
     def rotary_embedding(self, dim, base):
         return RotaryEmbedding(dim, base)
