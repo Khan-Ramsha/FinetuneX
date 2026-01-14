@@ -8,7 +8,7 @@ from finetunex.modules.norm import RMSNorm
 from finetunex.modules.mlp import MLP
 from finetunex.modules.positional_encoding import RotaryEmbedding
 
-class DecoderBlock(nn.Module):
+class LlamaDecoderBlock(nn.Module):
     def __init__(self, config: Config, layer_idx: int):
         super().__init__()
         self.input_layernorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
@@ -45,9 +45,6 @@ class LlamaModel(BaseModel):
     def norm_layer(self, hidden_size, eps):
         return RMSNorm(hidden_size, eps)
     
-    def decoder_layer(self, config, layer_idx):
-        return DecoderBlock(config, layer_idx)
-    
     def rotary_embedding(self, dim, base):
         return RotaryEmbedding(dim, base)
     
@@ -55,7 +52,7 @@ class LlamaModel(BaseModel):
         return RMSNorm(hidden_size, eps)
 
     def decoder_layer(self, config, layer_idx):
-        return DecoderBlock(config, layer_idx)
+        return LlamaDecoderBlock(config, layer_idx)
     
     def forward(self, input_ids, labels = None):
         B, T = input_ids.shape

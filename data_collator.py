@@ -4,6 +4,38 @@ import torch
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
 
+def pad(sequences, padding_value: int = 0, padding_side: str = "right", pad_to_multiple_of: int | None = None):
+
+    assert padding_side in ("right", "left")
+
+    max_len = max(seq.size(0) for seq in sequences)
+
+    # round up to multiple
+    if pad_to_multiple_of is not None:
+        remainder = max_len % pad_to_multiple_of
+        if remainder != 0:
+            max_len += pad_to_multiple_of - remainder
+
+    batch_size = len(sequences)
+    device = sequences[0].device
+    dtype = sequences[0].dtype
+
+    padded = torch.full(
+        (batch_size, max_len),
+        padding_value,
+        dtype=dtype,
+        device=device,
+    )
+
+    for i, seq in enumerate(sequences):
+        length = seq.size(0)
+        if padding_side == "right":
+            padded[i, :length] = seq
+        else:
+            padded[i, max_len - length:] = seq
+
+    return padded
+
 class DataCollator:
     def __init__(self, pad_token_id: int, completion_only_loss: bool = False):
         self.pad_token_id = pad_token_id
@@ -18,12 +50,12 @@ class DataCollator:
         if self.completion_only_loss:
             completion_mask = [torch.tensor(e["completion_mask"], dtype=torch.long) for e in examples]
         # Pad it
-        input_ids = pad_sequence(input_ids, batch_first=True, padding_value=self.pad_token_id)
-        attention_mask = pad_sequence(attention_mask, batch_first=True, padding_value=0)
-        labels = pad_sequence(labels, batch_first=True, padding_value=-100)
+        input_ids = pad(input_ids, padding_value=self.pad_token_id, padding_side = "right", pad_to_multiple_of = 128)
+        attention_mask = pad(attention_mask, padding_value = 0, padding_side = "right", pad_to_multiple_of = 128)
+        labels = pad(labels, padding_value=-100, padding_side = "right", pad_to_multiple_of = 128)
 
         if self.completion_only_loss:
-            completion_mask = pad_sequence(completion_mask, batch_first=True, padding_value=0)
+            completion_mask = pad(completion_mask, padding_value = 0, padding_side ="right", pad_to_multiple_of = 128)
             labels = labels.masked_fill_(completion_mask == 0, -100)
 
         for i, lbl in enumerate(labels):

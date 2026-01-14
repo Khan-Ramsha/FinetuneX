@@ -4,11 +4,13 @@ This class implements Optimized version of MultiHead Attention with Grouping Que
 Rotary Embedding to rotate entire query & key tensors
 Creating causal mask by utilizing scaled_dot_product() from torch - SDPA (Huggingface style)
 """
+from finetunex.modules.flashattn import TritonAttn
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 from finetunex.modules.positional_encoding import apply_rotary_emb
+
 
 class GroupQueryAttention(nn.Module): #Qwen2 Attention
     def __init__(self, dim, num_head_q, num_head_kv, rope_theta, layer_idx = 0):
@@ -20,9 +22,9 @@ class GroupQueryAttention(nn.Module): #Qwen2 Attention
         self.headD = dim // num_head_q
         assert self.headD * self.num_head_q == self.dim
         self.q_proj = nn.Linear(dim, self.headD * self.num_head_q, bias = True)
-        self.k_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
-        self.v_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=True)
-        self.o_proj = nn.Linear(self.headD * self.num_head_q, dim, bias=False)
+        self.k_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias = True)
+        self.v_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias = True)
+        self.o_proj = nn.Linear(self.headD * self.num_head_q, dim, bias = False)
 
     def forward(self, x, position_emb,  attention_mask):
         B, T, D = x.shape

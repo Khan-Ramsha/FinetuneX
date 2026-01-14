@@ -169,7 +169,7 @@ class SFT:
                 labels = batch["labels"]
 
                 with self.accelerator.accumulate(self.model):
-                    outputs = self.model(input_ids=input_ids, labels=labels)
+                    outputs = self.model(input_ids=input_ids, attn_mask = attention_mask, labels=labels)
                     loss = outputs['loss']
                     self.accelerator.backward(loss)
 

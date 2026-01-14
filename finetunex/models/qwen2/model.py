@@ -45,18 +45,22 @@ class Qwen2Model(BaseModel):
     def decoder_layer(self, config, layer_idx):
         return DecoderBlock(config, layer_idx)
     
-    def forward(self, input_ids, labels = None):
+    def forward(self, input_ids, attn_mask = None, labels = None):
         B, T = input_ids.shape
         hidden_states = self.embed_tokens(input_ids) 
         position_ids = torch.arange(T, device=input_ids.device).unsqueeze(0).expand(B, -1)
         pos_emb = self.rotary(hidden_states, position_ids)
         
         num_tokens = hidden_states.shape[1]
-        attention_mask = torch.triu(torch.ones(num_tokens, num_tokens, device=hidden_states.device, dtype=torch.bool), diagonal=1)
-        attention_mask = attention_mask[None, None, :, :] #broadcasting
+        causal_mask = torch.triu(torch.ones(num_tokens, num_tokens, device=hidden_states.device, dtype=torch.bool), diagonal=1)
+        if attn_mask is not None:
+            padding_mask = (attn_mask == 0) #HIDE for value zero 
+            combined_mask = causal_mask[None, None, :, :] | padding_mask[:, None, None, :]
+        else:
+            combined_mask = causal_mask[None, None, :, :] #broadcasting
         # passing hidden states to stack of blocks
         for layer in self.layers:
-            hidden_states = layer(hidden_states, pos_emb, attention_mask)
+            hidden_states = layer(hidden_states, pos_emb, combined_mask)
         hidden_states = self.norm(hidden_states)
         logits = self.lm_head(hidden_states)
 
