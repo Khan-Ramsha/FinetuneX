@@ -37,8 +37,23 @@ def _attn_fwd_inner (
         lo, hi = 0, SEQ_LEN
 
     """
+    assuming 64 to be the BLOCKSIZEQ
     let's calculate the value of `lo` for STAGE == 2: lo = 0 if blockindxq is 0, 64 if blockidxq is 1, that means the starting point of each block 
     where blocks are [0....63], [64,65,66,...127], and so on... `lo` points to the start of a particular BLOCK 
+    For causal:
+    The very first call is made with STAGE = 3, in the kernel we do 4 - STAGE, the value of STAGE becomes 1
+    `lo` & `hi` = 0, no keys to process.
+    Second call is made with STAGE = 2 (since STAGE = 3 for causal)
+    `lo` = 0 * 64, `hi` = 1*64
+    0-64 is the range we have to process keys. 
+    since BlocksizeK = 32,
+    iteration 1: startkv=0, [0:32]
+    iteration 2: startkv=32, [32:64]
+    for BLOCK0 of Q - offseq = [0,1,2,...63]
+    for causal: qoffsets >= keyoffset can only attend. 
+    keyoffset passed was (0,..31) then add startkv to get the actual offset. 
+    do all the attention calculation,
+    at last advance KV ptrs by blocksizek
     """
     K_block_ptr = tl.advance(K_block_ptr, (0, lo))
     V_block_ptr = tl.advance(V_block_ptr, (lo, 0))

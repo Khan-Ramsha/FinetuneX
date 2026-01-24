@@ -4,7 +4,7 @@ This class implements Optimized version of MultiHead Attention with Grouping Que
 Rotary Embedding to rotate entire query & key tensors
 Creating causal mask by utilizing scaled_dot_product() from torch - SDPA (Huggingface style)
 """
-from finetunex.modules.flashattn import TritonAttn
+from finetunex.modules.flashattn_mha import TritonAttn
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
