@@ -2,8 +2,6 @@
 This is the Flash attention implementation that supports SEQLEN multiple of 128 & equal number of Query, Key, Value heads. 
 
 """
-
-
 import torch
 import triton
 import triton.language as tl
@@ -102,10 +100,9 @@ def _attn_fwd_inner (
 
         """
         for kblockptr -> (0, BLOCKSIZEKV) don't move in dim 0 and move by BLOCKSIZEKV in dim 1 that is for sequence. 
-        initially K[:, 0:64], then [:, 64:128]
+        initially K[:, 0:63], then [:, 64:127]
         """
-
-        #Move to the next block of K and V
+        #Move to the next block of K and Vf
         K_block_ptr = tl.advance(K_block_ptr, (0,BLOCK_SIZE_KV))
         V_block_ptr = tl.advance(V_block_ptr, (BLOCK_SIZE_KV, 0))
     return O_block, l_i, m_i
