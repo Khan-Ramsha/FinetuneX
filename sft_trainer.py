@@ -44,7 +44,7 @@ class SFT:
             self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
             self.model = LlamaModel(config=config) #self implemented architecture
             load_weights_into_llama(self.model, config, hf_model_state_dict)
-        self.accelerator = Accelerator(gradient_accumulation_steps=8,mixed_precision="bf16")
+        self.accelerator = Accelerator(gradient_accumulation_steps=8)
         # self.model.gradient_checkpointing_enable()
         # self.model.config.use_cache = False
         if self.tokenizer.pad_token is None:

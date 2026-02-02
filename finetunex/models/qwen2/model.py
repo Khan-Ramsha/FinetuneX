@@ -8,12 +8,13 @@ from finetunex.modules.norm import RMSNorm
 from finetunex.modules.mlp import MLP
 from finetunex.modules.positional_encoding import RotaryEmbedding
 from torch.utils.checkpoint import checkpoint
+from torch.utils.checkpoint import checkpoint
 
 class DecoderBlock(nn.Module):
     def __init__(self, config: Config, layer_idx : int):
         super().__init__()
         self.input_layernorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
-        self.attn = GroupQueryAttention(config.hidden_size, config.num_attention_heads, config.num_key_value_heads, config.rope_theta, layer_idx = layer_idx)
+        self.attn = GroupQueryAttention(config.hidden_size, config.num_attention_heads, config.num_key_value_heads, config.rope_theta, layer_idx = layer_idx, use_flashattn = False)
         self.post_attention_layernorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.mlp = MLP(config)
     

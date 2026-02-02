@@ -11,15 +11,15 @@ import torch.nn.functional as F
 import math
 from finetunex.modules.positional_encoding import apply_rotary_emb
 
-
 class GroupQueryAttention(nn.Module): #Qwen2 Attention
-    def __init__(self, dim, num_head_q, num_head_kv, rope_theta, layer_idx = 0):
+    def __init__(self, dim, num_head_q, num_head_kv, rope_theta, layer_idx = 0, use_flashattn = False):
         super().__init__()
         self.layer_idx = layer_idx
         self.dim = dim
         self.num_head_q = num_head_q
         self.num_head_kv = num_head_kv
         self.headD = dim // num_head_q
+        self.use_flashattn =  use_flashattn
         assert self.headD * self.num_head_q == self.dim
         self.q_proj = nn.Linear(dim, self.headD * self.num_head_q, bias = True)
         self.k_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias = True)
@@ -39,26 +39,41 @@ class GroupQueryAttention(nn.Module): #Qwen2 Attention
         
         #rotate key, query
         cos, sin = position_emb
-        q, k= apply_rotary_emb(q, k, cos, sin)
-
-        # repeating kv heads to match query head
-        k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
-        v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
-        attn_scores = q @ k.transpose(2, 3)  # (b, n_heads, q_len, k_len)
-        attn_scores = attn_scores.masked_fill(attention_mask, float("-inf"))
-        attn_weights = torch.softmax(attn_scores / self.headD **0.5, dim=-1)
-        context = (attn_weights @ v).transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)
+        q, k = apply_rotary_emb(q, k, cos, sin)
+        
+        if self.use_flashattn:
+            # use triton kernels
+            q = q.to(torch.float16)
+            k = k.to(torch.float16)
+            v = v.to(torch.float16)
+            q = q.contiguous()
+            k = k.contiguous()
+            v = v.contiguous()
+            softmax_scale = 1.0 / math.sqrt(self.headD)
+            causal = True 
+            context = TritonAttn.apply(q, k, v, causal, softmax_scale).half()
+            context = context.transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)      
+        else:
+            # repeating kv heads to match query head
+            k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
+            v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
+            attn_scores = q @ k.transpose(2, 3)  # (b, n_heads, q_len, k_len)
+            attn_scores = attn_scores.masked_fill(attention_mask, float("-inf"))
+            attn_weights = torch.softmax(attn_scores / self.headD **0.5, dim=-1)
+            context = (attn_weights @ v).transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)
+        context = context.to(torch.float32)
         return self.o_proj(context)
     
 
 class LlamaGroupQueryAttention(nn.Module): #Llama Attention
-    def __init__(self, dim, num_head_q, num_head_kv, rope_theta, layer_idx = 0):
+    def __init__(self, dim, num_head_q, num_head_kv, rope_theta, layer_idx = 0, use_flashattn = False):
         super().__init__()
         self.layer_idx = layer_idx
         self.dim = dim
         self.num_head_q = num_head_q
         self.num_head_kv = num_head_kv
         self.headD = dim // num_head_q
+        self.use_flashattn =  use_flashattn
         assert self.headD * self.num_head_q == self.dim
         self.q_proj = nn.Linear(dim, self.headD * self.num_head_q, bias = False)
         self.k_proj = nn.Linear(dim, self.headD * self.num_head_kv, bias=False)
@@ -80,11 +95,25 @@ class LlamaGroupQueryAttention(nn.Module): #Llama Attention
         cos, sin = position_emb
         q, k= apply_rotary_emb(q, k, cos, sin)
 
-        # repeating kv heads to match query head
-        k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
-        v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
-        attn_scores = q @ k.transpose(2, 3)  # (b, n_heads, q_len, k_len)
-        attn_scores = attn_scores.masked_fill(attention_mask, float("-inf"))
-        attn_weights = torch.softmax(attn_scores / self.headD **0.5, dim=-1)
-        context = (attn_weights @ v).transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)
+        if self.use_flashattn:
+            # use triton kernels
+            q = q.to(torch.float16)
+            k = k.to(torch.float16)
+            v = v.to(torch.float16)
+            q = q.contiguous()
+            k = k.contiguous()
+            v = v.contiguous()
+            softmax_scale = 1.0 / math.sqrt(self.headD)
+            causal = True 
+            context = TritonAttn.apply(q, k, v, causal, softmax_scale).half()
+            context = context.transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)      
+        else:
+            # repeating kv heads to match query head
+            k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
+            v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
+            attn_scores = q @ k.transpose(2, 3)  # (b, n_heads, q_len, k_len)
+            attn_scores = attn_scores.masked_fill(attention_mask, float("-inf"))
+            attn_weights = torch.softmax(attn_scores / self.headD **0.5, dim=-1)
+            context = (attn_weights @ v).transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)
+        context = context.to(torch.float32)
         return self.o_proj(context)
