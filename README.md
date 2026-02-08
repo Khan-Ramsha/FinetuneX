@@ -109,6 +109,7 @@ Demo:
 https://github.com/user-attachments/assets/e8c26301-79b9-41a6-9808-bd3bc27a3426
 
 Check out the blogs I wrote while building FinetuneX:
+- https://www.notion.so/Flash-Attention-2f071454a834808487f8f19b7395ce9c?source=copy_link
 - https://www.notion.so/The-Math-behind-Rotating-Attention-23d71454a834808a879df30519ded1df?source=copy_link
 - https://www.notion.so/How-transpose-pretends-to-transpose-in-PyTorch-1aae2160433a41438a79771c83a620a1?source=copy_link
 - https://www.notion.so/Memory-layout-23d71454a8348001bdbed261efd2746c?source=copy_link
