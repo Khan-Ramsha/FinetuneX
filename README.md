@@ -1,4 +1,4 @@
-# FinetuneX
+<img width="527" height="474" alt="image" src="https://github.com/user-attachments/assets/c66ad5a2-928d-4278-b1d7-ef4437b61d7a" /># FinetuneX
 
 FinetuneX is a ground-up framework with a platform interface designed to democratize LLM fine-tuning by giving users **complete control** over their model training process with an  interface for fine-tuning models on your custom datasets, choosing custom training methods, interacting with your fine-tuned models. 
 
@@ -10,6 +10,7 @@ Built entirely from scratch, FinetuneX implements core architecture from scratch
 - Interface to interact with the fine-tuned model
 - Use multiple LLM architectures
 - Experiment with multiple post-training algorithms (SFT, DPO, PPO, RLOO)
+- From-scratch FlashAttention-2 Triton Kernels (supporting Group Query Attention)
 - Choose extensive fine-tuning capabilities including Full Fine-Tuning, LoRA and QLoRA
   
 It’s designed for researchers, ML enthusiasts, and developers who want full control over the training process while keeping things modular and extensible.
@@ -56,6 +57,25 @@ The architecture for Qwen2 incorporates several key components: Group Query Atte
 Both Qwen2 and LLaMA3 models share the same core transformer architecture (with slight difference in Attention Layer: for Llama no QKV bias) allows to:
 - Core components can be reused across similar architecture.
 - A shared base class inherited by all models makes it easy to extend support for new architectures.
+
+## Performance Benchmark (Standard PyTorch Attention vs Triton Kernels for FlashAttention v2)
+
+**Multi-head Attention:**
+setup: numheads = 8, headdim = 64
+
+<img width="541" height="532" alt="image" src="https://github.com/user-attachments/assets/e521dd69-b31c-43c6-be23-1a4f8fdb633d" />
+
+<img width="541" height="482" alt="image" src="https://github.com/user-attachments/assets/9bd581b4-0fb7-4695-9ce4-cc81db7a7385" />
+
+** Since Qwen2 & Llama3 (model architechture that FinetuneX supports) uses Group Query Attention, so I modified kernels to support Group Query Attention**
+setup: numheads Q = 14, numheads KV = 2, headdim = 64
+
+<img width="527" height="525" alt="image" src="https://github.com/user-attachments/assets/44508d17-ef02-4821-96e4-dcf564472f36" />
+
+<img width="527" height="474" alt="image" src="https://github.com/user-attachments/assets/c42c53de-d132-420c-a7e4-8517f09d0c8a" />
+
+Check out my recent blog on FlashAttnv2: where I have walkthrough the kernels I wrote for FlashAttn with Group Query Attention support
+- https://www.notion.so/Flash-Attention-2f071454a834808487f8f19b7395ce9c?source=copy_link
 
 ## Dataset Support
 #### For (SFT)
