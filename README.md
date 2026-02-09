@@ -61,20 +61,24 @@ Both Qwen2 and LLaMA3 models share the same core transformer architecture (with 
 ## Performance Benchmark (Standard PyTorch Attention vs Triton Kernels for FlashAttention v2)
 
 **Multi-head Attention:**
+
 setup: numheads = 8, headdim = 64
 
 <img width="541" height="532" alt="image" src="https://github.com/user-attachments/assets/e521dd69-b31c-43c6-be23-1a4f8fdb633d" />
 
 <img width="541" height="482" alt="image" src="https://github.com/user-attachments/assets/9bd581b4-0fb7-4695-9ce4-cc81db7a7385" />
 
-** Since Qwen2 & Llama3 (model architechture that FinetuneX supports) uses Group Query Attention, so I modified kernels to support Group Query Attention**
+**Since Qwen2 & Llama3 (model architechture that FinetuneX supports) uses Group Query Attention, so I modified kernels to support Group Query Attention**
+
 setup: numheads Q = 14, numheads KV = 2, headdim = 64
 
 <img width="527" height="525" alt="image" src="https://github.com/user-attachments/assets/44508d17-ef02-4821-96e4-dcf564472f36" />
 
 <img width="527" height="474" alt="image" src="https://github.com/user-attachments/assets/c42c53de-d132-420c-a7e4-8517f09d0c8a" />
 
-Check out my recent blog on FlashAttnv2: where I have walkthrough the kernels I wrote for FlashAttn with Group Query Attention support
+
+For a deeper dive, see my recent blog on **FlashAttention v2**, which walks through
+the custom kernels implemented for FlashAttention with **GQA support**
 - https://www.notion.so/Flash-Attention-2f071454a834808487f8f19b7395ce9c?source=copy_link
 
 ## Dataset Support
