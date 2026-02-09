@@ -66,7 +66,7 @@ setup: numheads = 8, headdim = 64
 
 <img width="541" height="532" alt="image" src="https://github.com/user-attachments/assets/e521dd69-b31c-43c6-be23-1a4f8fdb633d" />
 
-<img width="541" height="482" alt="image" src="https://github.com/user-attachments/assets/9bd581b4-0fb7-4695-9ce4-cc81db7a7385" />
+<img width="533" height="483" alt="image" src="https://github.com/user-attachments/assets/69e53128-dd0f-4709-9c89-8101d9e3e5dd" />
 
 **Since Qwen2 & Llama3 (model architechture that FinetuneX supports) uses Group Query Attention, so I modified kernels to support Group Query Attention**
 
