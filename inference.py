@@ -41,9 +41,8 @@ def infer(prompt, model_path, model_name):
             top_p = 0.8, 
             stop_tokens=[tokenizer.eos_token_id] 
         )
-    generated_text = tokenizer.decode(generated_tokens[0].tolist())
-    response = generated_text.split('<|im_start|>assistant\n')[-1]
-    return response.strip()
+    generated_text = tokenizer.decode(generated_tokens[0].tolist(), skip_special_tokens=True)
+    return generated_text.strip()
 
 def infer_base(prompt, model_path):
     print("\n" + "="*50)
@@ -94,7 +93,3 @@ def infer_base(prompt, model_path):
 
     print(f"\nFull response:\n{full_response}")
     return full_response
-
-    print("\n" + "="*50)
-    print("INFERENCE COMPLETE!")
-    print("="*50)

@@ -12,7 +12,7 @@ class LlamaDecoderBlock(nn.Module):
     def __init__(self, config: Config, layer_idx: int):
         super().__init__()
         self.input_layernorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
-        self.attn = LlamaGroupQueryAttention(config.hidden_size, config.num_attention_heads, config.num_key_value_heads, config.rope_theta, layer_idx = layer_idx, use_flashattn = False)
+        self.attn = LlamaGroupQueryAttention(config.hidden_size, config.num_attention_heads, config.num_key_value_heads, layer_idx = layer_idx, use_flashattn = False)
         self.post_attention_layernorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.mlp = MLP(config)
     
@@ -40,13 +40,7 @@ class LlamaModel(BaseModel):
             self.lm_head.weight = self.embed_tokens.weight #tie embeddings
     
     def rotary_embedding(self, dim, base):
-        return RotaryEmbedding(dim, base)
-    
-    def norm_layer(self, hidden_size, eps):
-        return RMSNorm(hidden_size, eps)
-    
-    def rotary_embedding(self, dim, base):
-        return RotaryEmbedding(dim, base)
+        return RotaryEmbedding(dim, base, rope_scaling = self.config.rope_scaling)
     
     def norm_layer(self, hidden_size, eps):
         return RMSNorm(hidden_size, eps)

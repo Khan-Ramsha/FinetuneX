@@ -5,10 +5,6 @@ from transformers import AutoModelForCausalLM
 from finetunex.base.config import Config
 from finetunex.models.llama.model import LlamaModel
 
-hf_model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B") #from hf
-config = Config.config_from_model("Llama-3.2-1B")
-model = LlamaModel(config=config) #self implemented architecture
-
 def save_pretrained(outputdir, model_state_dict, config):
     os.makedirs(outputdir, exist_ok=True)
     torch.save(model_state_dict, os.path.join(outputdir, "model.bin")) #saving trained weights

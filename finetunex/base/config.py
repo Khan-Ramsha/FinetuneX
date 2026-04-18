@@ -16,6 +16,7 @@ class Config:
     tie_word_embeddings : bool = True
     rms_norm_eps: int = 1e-06
     rope_theta: float = 1000000.0
+    rope_scaling: dict = None
 
     _available_models = []
 
@@ -79,8 +80,14 @@ llama_variants = [
         max_position_embeddings = 131072, # max seq len
         tie_word_embeddings = True,
         rms_norm_eps = 1e-05,
-        rope_theta = 500000.0
-
+        rope_theta = 500000.0,
+        rope_scaling={
+            "factor": 32.0,
+            "high_freq_factor": 4.0,
+            "low_freq_factor": 1.0,
+            "original_max_position_embeddings": 8192,
+            "rope_type": "llama3",
+        }
     )   
 ]
 
