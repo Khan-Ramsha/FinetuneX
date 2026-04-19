@@ -3,3 +3,6 @@ datasets
 torch
 accelerate
 gradio
+pydantic
+triton; platform_system == "Linux"
+triton-windows; platform_system == "Windows"

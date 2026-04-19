@@ -52,16 +52,16 @@ class GroupQueryAttention(nn.Module): #Qwen2 Attention
             softmax_scale = 1.0 / math.sqrt(self.headD)
             causal = True 
             context = TritonAttn.apply(q, k, v, causal, softmax_scale).half()
-            context = context.transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)      
+            context = context.transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)  
+            context = context.to(torch.float32) #convert back to float32
         else:
             # repeating kv heads to match query head
             k = k.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
             v = v.repeat_interleave(self.num_head_q // self.num_head_kv, dim = 1)
-            attn_scores = q @ k.transpose(2, 3)  # (b, n_heads, q_len, k_len)
+            attn_scores = (q @ k.transpose(2, 3)) / (self.headD ** 0.5) # (b, n_heads, q_len, k_len)
             attn_scores = attn_scores.masked_fill(attention_mask, float("-inf"))
-            attn_weights = torch.softmax(attn_scores / self.headD **0.5, dim=-1)
+            attn_weights = torch.softmax(attn_scores, dim=-1)
             context = (attn_weights @ v).transpose(1, 2).reshape(B, T, self.headD * self.num_head_q)
-        context = context.to(torch.float32)
         return self.o_proj(context)
     
 

@@ -5,25 +5,6 @@ from transformers import AutoModelForCausalLM
 from finetunex.base.config import Config
 from finetunex.models.llama.model import LlamaModel
 
-def save_pretrained(outputdir, model_state_dict, config):
-    os.makedirs(outputdir, exist_ok=True)
-    torch.save(model_state_dict, os.path.join(outputdir, "model.bin")) #saving trained weights
-    config_dict = config.__dict__.copy()
-    with open(os.path.join(outputdir, "config.json"), "w") as f:
-        json.dump(config_dict, f, indent=2)
-
-def from_pretrained(model_path): #load the model after finetuning
-    config_path = os.path.join(model_path, "config.json")
-    with open(config_path, "r") as f:
-        config_dict = json.load(f)
-    config = Config.from_dict(config_dict)
-    model = LlamaModel(config)  #Model gets initialized
-    # load weights
-    weights_path = os.path.join(model_path, "model.bin")
-    state_dict = torch.load(weights_path)
-    model.load_state_dict(state_dict, strict=False)
-    return model
-
 def load_weights_into_llama(model, config, hf_model_state_dict):
  
     def assign(left, right, tensor_name="unknown"):
@@ -89,9 +70,9 @@ def load_weights_into_llama(model, config, hf_model_state_dict):
         )
     model.norm.weight = assign(model.norm.weight, hf_model_state_dict["model.norm.weight"], "model.norm.weight")
 
-    if "lm_head.weight" in hf_model_state_dict:
+    if "lm_head.weight" in hf_model_state_dict and config.tie_word_embeddings:
         model.lm_head.weight = assign(model.lm_head.weight, hf_model_state_dict["lm_head.weight"], "lm_head.weight")
     else:
         # Model uses tie embedding, hence assigning token embeddings 
         print("Model uses weight tying.")
-        model.lm_head.weight = assign(model.lm_head.weight, hf_model_state_dict["model.embed_tokens.weight"], "model.embed_tokens.weight")
+        model.lm_head.weight = model.embed_tokens.weight

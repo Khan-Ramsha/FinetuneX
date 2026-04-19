@@ -3,7 +3,7 @@
 # ====================
 
 import torch
-from finetunex.models.qwen2.save_load import from_pretrained
+from utils import from_pretrained
 from finetunex.text_generation.generate import generate
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -12,7 +12,11 @@ def infer(prompt, model_path, model_name):
     model = from_pretrained(model_path)
     
     if model_name == "Qwen2.5-0.5B":
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/" + model_name)    
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/" + model_name)  
+    elif model_name == "Llama-3.2-1B":
+        tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     model.eval()
@@ -21,7 +25,7 @@ def infer(prompt, model_path, model_name):
     messages = [{"role": "user", "content": prompt}]
     
     chat_input = tokenizer.apply_chat_template(
-        messages,
+        messages,   
         tokenize=False,
         add_generation_prompt=True
     )
@@ -48,10 +52,16 @@ def infer_base(prompt, model_path):
     print("\n" + "="*50)
     print("STARTING INFERENCE")
     print("="*50)
+    
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     if model_path == "Qwen2.5-0.5B":
         model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B")
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    elif model_path == "Llama-3.2-1B":
+        model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+        tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
+    else:
+        raise ValueError(f"Unknown model: {model_path}")
     model.to(device)
     model.eval()
     print(f"Model loaded on device: {device}")
