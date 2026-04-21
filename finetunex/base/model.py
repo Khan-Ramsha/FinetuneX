@@ -4,9 +4,10 @@ import torch.nn as nn
 from abc import ABC, abstractmethod
 
 class BaseModel(ABC, nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, args = None):
         super().__init__()
         self.config = config
+        self.args = args
         self._build_model()
 
     @abstractmethod
@@ -15,7 +16,7 @@ class BaseModel(ABC, nn.Module):
         pass
     
     @abstractmethod
-    def decoder_layer(self, layer_idx) -> nn.Module:
+    def decoder_layer(self, config, layer_idx) -> nn.Module:
         """ Model specific decoder layer implementation"""
         pass
 
@@ -25,10 +26,10 @@ class BaseModel(ABC, nn.Module):
         pass
     
     @abstractmethod
-    def rotary_embedding(self, dim, rope_theta) -> nn.Module:
+    def rotary_embedding(self, dim, base) -> nn.Module:
         """" Positional Encoding"""
         pass
 
     @abstractmethod
-    def forward(self, input_ids, attention_mask = None):
+    def forward(self, input_ids, attention_mask = None, labels = None):
         pass

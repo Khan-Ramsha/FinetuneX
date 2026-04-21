@@ -30,8 +30,7 @@ class LlamaDecoderBlock(nn.Module):
 
 class LlamaModel(BaseModel):
     def __init__(self, config: Config, args: SFTConfig):
-        self.args = args
-        super().__init__(config)
+        super().__init__(config, args)
 
     def _build_model(self):
         self.embed_tokens = nn.Embedding(self.config.vocab_size, self.config.hidden_size) 
