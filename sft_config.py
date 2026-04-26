@@ -38,3 +38,7 @@ class SFTConfig:
         default=1.0,
         metadata={"help":"maximum gradient norm for clipping"}
     )
+    report_to_wandb: bool = field(
+        default=False,
+        metadata={"help": "reports logs to wandb"}
+    )

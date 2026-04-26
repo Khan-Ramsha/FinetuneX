@@ -54,9 +54,10 @@ class DataCollator:
         attention_mask = pad(attention_mask, padding_value = 0, padding_side = "right", pad_to_multiple_of = 128)
         labels = pad(labels, padding_value=-100, padding_side = "right", pad_to_multiple_of = 128)
 
+        labels = labels.masked_fill(attention_mask == 0, -100)
         if self.completion_only_loss:
             completion_mask = pad(completion_mask, padding_value = 0, padding_side ="right", pad_to_multiple_of = 128)
-            labels = labels.masked_fill_(completion_mask == 0, -100)
+            labels = labels.masked_fill(completion_mask == 0, -100)
 
         for i, lbl in enumerate(labels):
             valid_tokens = (lbl != -100).sum().item() #tokens to compute loss on

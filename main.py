@@ -3,6 +3,7 @@ from data_collator import DataCollator
 import pandas as pd
 from data_preprocessing import ChatMLPreprocessor
 from sft_config import SFTConfig
+import wandb
 
 def main(file, model):
     data = pd.read_csv(file)
@@ -20,6 +21,10 @@ def main(file, model):
     tokenized_data = sft.prepare_dataset(dataset = train_dataset)
     eval_dataset = sft.prepare_dataset(dataset = eval_dataset)
     collator = DataCollator(pad_token_id=sft.tokenizer.pad_token_id, completion_only_loss= True)
+    if training_args.report_to_wandb:
+        wandb.init(
+            project="finetunex-sft",
+            config=vars(training_args),
+            name=f"{model}-{training_args.epochs}-epochs"
+        )
     sft.train_model(tokenized_data, collator, eval_dataset=eval_dataset)
-    print("\n" + "=" * 50)
-    print("DATA PREPARED FOR MODEL TRAINING & MODEL TRAINING STARTS")
