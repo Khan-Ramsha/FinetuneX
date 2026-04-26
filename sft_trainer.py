@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -14,12 +15,12 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
-from accelerate import Accelerator
 from evaluate import evaluate_model
 from early_stopping import EarlyStopping
 from sft_config import SFTConfig
 from finetunex.models.qwen2.model import Qwen2Model
 from finetunex.models.llama.model import LlamaModel
+import wandb
 
 class SFT:
     def __init__(self, model: str, pad_token: int, args: SFTConfig):
@@ -42,17 +43,23 @@ class SFT:
             self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
             self.model = LlamaModel(config=config, args=self.args) #self implemented architecture
             load_weights_into_llama(self.model, config, hf_model_state_dict)
-        self.accelerator = Accelerator(gradient_accumulation_steps=8)
         # self.model.gradient_checkpointing_enable()
         # self.model.config.use_cache = False
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        # For tracking learning rate
-        self.lr_history = []
-        self.step_history = []
     
     def prepare_dataset(self, dataset):
+        def _apply_chat_template_ids(tokenizer, *args, **kwargs):
+            """Return a plain list of token ids; newer transformers may return BatchEncoding."""
+            out = tokenizer.apply_chat_template(*args, **kwargs)
+            if isinstance(out, list):
+                print('it is a list')
+                return out
+            ids = out["input_ids"] if hasattr(out, "input_ids") else out
+            if hasattr(ids, "tolist"):
+                ids = ids.tolist()
+            return list(ids)
+
         def tokenize(example, tokenizer):
             messages = example["messages"]
             assistant_idx = next((i for i, m in enumerate(messages) if m["role"] == "assistant"), None)
@@ -63,31 +70,34 @@ class SFT:
             full_convo = messages[:assistant_idx + 1]
 
             if self.model_name == "Qwen2.5-0.5B":
-                user_prompt_ids = tokenizer.apply_chat_template(
+                user_prompt_ids = _apply_chat_template_ids(
+                    tokenizer,
                     user_prompt,
                     tokenize=True,
                     add_generation_prompt=True,
-                    return_tensors=None
+                    return_tensors=None,
                 )
-                full_convo_ids = tokenizer.apply_chat_template(
+                full_convo_ids = _apply_chat_template_ids(
+                    tokenizer,
                     full_convo,
                     tokenize=True,
                     add_generation_prompt=False,
-                    return_tensors=None
+                    return_tensors=None,
                 )
             if self.model_name == "Llama-3.2-1B":
-                user_prompt_ids = tokenizer.apply_chat_template(
+                user_prompt_ids = _apply_chat_template_ids(
+                    tokenizer,
                     user_prompt,
                     tokenize=True,
                     add_generation_prompt=True,
-                    return_tensors=None
+                    return_tensors=None,
                 )
-                
-                full_convo_ids = tokenizer.apply_chat_template(
+                full_convo_ids = _apply_chat_template_ids(
+                    tokenizer,
                     full_convo,
                     tokenize=True,
                     add_generation_prompt=False,
-                    return_tensors=None
+                    return_tensors=None,
                 )
 
             if full_convo_ids[-1] != self.tokenizer.eos_token_id:
@@ -109,101 +119,87 @@ class SFT:
         dataset = dataset.map(tokenize, fn_kwargs={"tokenizer": self.tokenizer})
         return dataset
 
-    def train_model(self, dataset, data_collator, batch_size, eval_dataset, gradient_accumulation_steps):
+    def _save_checkpoint(self):
+        
+        return
+
+    def train_model(self, dataset, data_collator, eval_dataset):
+
+        wandb.init(
+            project="finetunex-sft",
+            config=vars(self.args),
+            name=f"{self.model_name}-{self.args.epochs}epochs"
+        )
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(device)
         self.model.train()
-        data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
 
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.args.learning_rate,weight_decay=self.args.weight_decay) #base learning rate
+        data_loader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=True, collate_fn=data_collator)
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.args.learning_rate, weight_decay=self.args.weight_decay)
 
-        total_batches = self.args.epochs * len(data_loader)
-        total_steps = total_batches // gradient_accumulation_steps
+        # number of optimizer updates per epoch (round up so the trailing partial window still counts)
+        steps_per_epoch = math.ceil(len(data_loader) / self.args.gradient_accumulation_steps)
+        total_steps = steps_per_epoch * self.args.epochs
         warmup_steps = int(0.1 * total_steps)  # 10% warmup
-
-        # short warmup phase + cosine decay
         scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps
         )
-
-        # Prepare with accelerator
-        self.model, optimizer, data_loader, scheduler = self.accelerator.prepare(
-            self.model, optimizer, data_loader, scheduler
-        )
-
-        # Print scheduler info
-        print(f"Total training steps: {total_steps}")
-        print(f"Warmup steps: {warmup_steps}")
-        print(f"Base learning rate: {self.args.learning_rate}")
-        print(f"[Before training] LR = {scheduler.get_last_lr()[0]:.8f}")
-
-        global_step = 0
         early_stop = EarlyStopping()
+        global_step = 0
+        num_microbatches = len(data_loader)
+
         for epoch in range(self.args.epochs):
-            if self.accelerator.is_main_process:
-                progress = tqdm(data_loader, desc=f"Epoch {epoch+1}/{self.args.epochs}")
-            else:
-                progress = data_loader
+            epoch_loss = 0.0
+            window_loss, window_count = 0.0, 0
+            optimizer.zero_grad(set_to_none=True)
 
-            total_loss = 0.0
-            num_batches = 0
+            for step, batch in enumerate(data_loader):
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                labels = batch["labels"].to(device)
 
-            for step, batch in enumerate(progress):
-                input_ids = batch["input_ids"]
-                attention_mask = batch["attention_mask"]
-                labels = batch["labels"]
+                outputs = self.model(input_ids=input_ids, attn_mask=attention_mask, labels=labels)
+                raw_loss = outputs['loss']
+                loss = raw_loss / self.args.gradient_accumulation_steps
 
-                with self.accelerator.accumulate(self.model):
-                    outputs = self.model(input_ids=input_ids, attn_mask = attention_mask, labels=labels)
-                    loss = outputs['loss']
-                    self.accelerator.backward(loss)
+                loss.backward()
+                epoch_loss += raw_loss.item()
+                window_loss += raw_loss.item()
+                window_count += 1
 
-                if self.accelerator.sync_gradients:
-                    self.accelerator.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                is_accum_boundary = (step + 1) % self.args.gradient_accumulation_steps == 0
+                is_last_microbatch = (step + 1) == num_microbatches
+
+                if is_accum_boundary or is_last_microbatch:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                     optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
                     scheduler.step()
-                    optimizer.zero_grad()
-
                     global_step += 1
-                    current_lr = scheduler.get_last_lr()[0]
 
-                    self.lr_history.append(current_lr)
-                    self.step_history.append(global_step)
-                    
-                    # phase info
-                    if self.accelerator.is_main_process:
-                        if global_step <= warmup_steps:
-                            phase = "WARMUP"
-                        else:
-                            phase = "COSINE DECAY"
-    
-                        print(f"Epoch {epoch+1}, Step {global_step}, LR: {current_lr:.8f} [{phase}]")
+                    step_loss = window_loss / max(window_count, 1)
+                    window_loss, window_count = 0.0, 0
 
-                loss_for_logging = self.accelerator.gather(outputs['loss'].detach()).mean()
-                total_loss += loss_for_logging.item()
-                num_batches += 1
+                    wandb.log({
+                        "loss": step_loss,
+                        "learning_rate": scheduler.get_last_lr()[0],
+                        "epoch": epoch,
+                        "global_step": global_step
+                    })
 
-                if self.accelerator.is_main_process:
-                    progress.set_postfix(loss=loss_for_logging.item())
+            avg_epoch_loss = epoch_loss / num_microbatches
+            wandb.log({"epoch_loss": avg_epoch_loss, "epoch": epoch})
 
-            avg_epoch_loss = total_loss / num_batches
-            self.accelerator.print(f"Epoch {epoch+1} average loss: {avg_epoch_loss:.4f}")
-            torch.cuda.empty_cache()
-
-            # Evaluation
             if eval_dataset is not None:
-                self.accelerator.wait_for_everyone()
-                loss = evaluate_model(self.model, eval_dataset, data_collator, batch_size, self.accelerator)
-                if early_stop.early_stopping(loss):
-                    self.accelerator.print("Early stopping triggered!")
-                    break
+                eval_metrics = evaluate_model(self.model, eval_dataset, data_collator, self.args.batch_size, device)
                 self.model.train()
+                wandb.log({"eval_loss": eval_metrics["loss"], "epoch": epoch, "perplexity": eval_metrics["perplexity"]})
+                if early_stop.early_stopping(eval_metrics["loss"]):
+                    wandb.log(f"Early stopping triggered at {epoch}")
+                    break
 
-        #Save model after training
-        self.accelerator.wait_for_everyone()
-        unwrapped_model = self.accelerator.unwrap_model(self.model)
-        if self.accelerator.is_main_process:
-            model_state_dict = unwrapped_model.state_dict()
-            os.makedirs(self.args.output_dir, exist_ok=True)
-            save_pretrained(self.args.output_dir, model_state_dict, unwrapped_model.config)
-        print("MODEL TRAINING DONE!")
+        self._save_checkpoint()
+        wandb.finish()

@@ -4,5 +4,6 @@ torch
 accelerate
 gradio
 pydantic
+wandb
 triton; platform_system == "Linux"
 triton-windows; platform_system == "Windows"

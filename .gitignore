@@ -2,3 +2,5 @@ __pycache__/
 finetuned/
 finetuned_qwen/
 finetunex.egg-info/
+.env
+wandb/

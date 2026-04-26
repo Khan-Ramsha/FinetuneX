@@ -15,7 +15,7 @@ class SFTConfig:
         metadata={"help":"number of times model sees training data"}
     )
     weight_decay:float = field(
-        default= 0.001,
+        default= 0,
         metadata={"help":"prevents overfitting"}  
     ) 
     gradient_accumulation_steps: int = field(
@@ -23,7 +23,7 @@ class SFTConfig:
         metadata={"help":"number of steps to accumulate gradients before updating parameters"}
     )
     batch_size: int = field(
-        default=8,
+        default=4,
         metadata={"help":"number of samples to process in each batch"}
     )
     use_flash_attn: bool = field(
@@ -33,4 +33,8 @@ class SFTConfig:
     output_dir: str = field(
         default="./finetuned",
         metadata={"help":"directory to save the model and training artifacts"}
+    )
+    max_grad_norm: float = field(
+        default=1.0,
+        metadata={"help":"maximum gradient norm for clipping"}
     )

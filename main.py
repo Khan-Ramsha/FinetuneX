@@ -20,6 +20,6 @@ def main(file, model):
     tokenized_data = sft.prepare_dataset(dataset = train_dataset)
     eval_dataset = sft.prepare_dataset(dataset = eval_dataset)
     collator = DataCollator(pad_token_id=sft.tokenizer.pad_token_id, completion_only_loss= True)
-    sft.train_model(tokenized_data, collator, batch_size=1, eval_dataset=eval_dataset, gradient_accumulation_steps=8)
+    sft.train_model(tokenized_data, collator, eval_dataset=eval_dataset)
     print("\n" + "=" * 50)
     print("DATA PREPARED FOR MODEL TRAINING & MODEL TRAINING STARTS")
