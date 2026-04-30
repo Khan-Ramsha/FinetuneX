@@ -1,12 +1,12 @@
 from finetunex.models.qwen2.model import Qwen2Model
 from finetunex.models.llama.model import LlamaModel
 import random
-
 import numpy as np
 import torch
 import os
 import json
 from finetunex.base.config import Config
+from sft_config import SFTConfig
 
 def set_seed(seed):
     random.seed(seed)
@@ -28,10 +28,11 @@ def from_pretrained(model_path): #load the model after finetuning
     with open(config_path, "r") as f:
         config_dict = json.load(f)
     config = Config.from_dict(config_dict)
+    arg = SFTConfig()
     if config.model_type == "qwen2":    
-        model = Qwen2Model(config)  #Model gets initialized
+        model = Qwen2Model(config, args = arg)  #Model gets initialized
     elif config.model_type == "llama":
-        model = LlamaModel(config)  #Model gets initialized
+        model = LlamaModel(config, args = arg)  #Model gets initialized
     else:
         raise ValueError(f"Unknown model type: {config.model_type}")
     # load weights
