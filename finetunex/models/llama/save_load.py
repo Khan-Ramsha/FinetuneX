@@ -70,7 +70,7 @@ def load_weights_into_llama(model, config, hf_model_state_dict):
         )
     model.norm.weight = assign(model.norm.weight, hf_model_state_dict["model.norm.weight"], "model.norm.weight")
 
-    if "lm_head.weight" in hf_model_state_dict and config.tie_word_embeddings:
+    if "lm_head.weight" in hf_model_state_dict and not config.tie_word_embeddings:
         model.lm_head.weight = assign(model.lm_head.weight, hf_model_state_dict["lm_head.weight"], "lm_head.weight")
     else:
         # Model uses tie embedding, hence assigning token embeddings 

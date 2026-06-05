@@ -197,7 +197,6 @@ class SFT:
             if self.args.report_to_wandb:
                 wandb.log({
                     "train/lr": scheduler.get_last_lr()[0],
-                    "train/grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm,
                     "train/gpu_mem_gb": torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0,
                     "train/global_step": global_step,
                     "train/epoch_loss": avg_epoch_loss,

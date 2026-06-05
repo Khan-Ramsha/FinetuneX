@@ -93,6 +93,7 @@ def infer_base(prompt, model_path):
             **inputs,
             max_new_tokens = max_new_tokens,
             temperature = 0.5,
+            do_sample = True,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
