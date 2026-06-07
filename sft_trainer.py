@@ -34,14 +34,14 @@ class SFT:
         set_seed(self.args.seed)
         config = Config.config_from_model(self.model_name)
         if self.model_name == "Qwen2.5-0.5B":
-            hf_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B")
+            hf_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B", torch_dtype=torch.bfloat16)
             hf_model_state_dict = hf_model.state_dict()
             del hf_model
             self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
             self.model = Qwen2Model(config=config, args=self.args)
             load_weights_into_qwen(self.model, config, hf_model_state_dict)
         elif self.model_name == "Llama-3.2-1B":
-            hf_model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B")
+            hf_model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B", torch_dtype=torch.bfloat16)
             hf_model_state_dict = hf_model.state_dict()
             del hf_model
             self.tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B")
@@ -60,57 +60,34 @@ class SFT:
             if hasattr(ids, "tolist"):
                 ids = ids.tolist()
             return list(ids)
-
         def tokenize(example, tokenizer):
-            MAXLEN=256
+            MAXLEN = 512
             messages = example["messages"]
             assistant_idx = next((i for i, m in enumerate(messages) if m["role"] == "assistant"), None)
             if assistant_idx is None:
                 raise ValueError("No assistant message found!")
 
             user_prompt = messages[:assistant_idx]
-            full_convo = messages[:assistant_idx + 1]
+            full_convo  = messages[:assistant_idx + 1]
 
-            if self.model_name == "Qwen2.5-0.5B":
-                user_prompt_ids = _apply_chat_template_ids(
-                    tokenizer,
-                    user_prompt,
-                    tokenize=True,
-                    add_generation_prompt=True,
-                    return_tensors=None,
-                )
-                full_convo_ids = _apply_chat_template_ids(
-                    tokenizer,
-                    full_convo,
-                    tokenize=True,
-                    add_generation_prompt=False,
-                    return_tensors=None,
-                )
-            if self.model_name == "Llama-3.2-1B":
-                user_prompt_ids = _apply_chat_template_ids(
-                    tokenizer,
-                    user_prompt,
-                    tokenize=True,
-                    add_generation_prompt=True,
-                    return_tensors=None,
-                )
-                full_convo_ids = _apply_chat_template_ids(
-                    tokenizer,
-                    full_convo,
-                    tokenize=True,
-                    add_generation_prompt=False,
-                    return_tensors=None,
-                )
+            user_prompt_ids = _apply_chat_template_ids(
+                tokenizer, user_prompt, tokenize=True,
+                add_generation_prompt=True, return_tensors=None,
+            )
+            full_convo_ids = _apply_chat_template_ids(
+                tokenizer, full_convo, tokenize=True,
+                add_generation_prompt=False, return_tensors=None,
+            )
 
             if full_convo_ids[-1] != self.tokenizer.eos_token_id:
                 full_convo_ids.append(self.tokenizer.eos_token_id)
 
-            full_convo_ids = full_convo_ids[:MAXLEN]
+            if len(full_convo_ids) > MAXLEN:
+                return {"input_ids": [], "completion_mask": []}  # filtered after map
+
             completion_mask = [0] * len(user_prompt_ids) + [1] * (len(full_convo_ids) - len(user_prompt_ids))
-            completion_mask = completion_mask[:MAXLEN]
+
             if sum(completion_mask) == 0:
-                print(f"Prompt Ids: {tokenizer.decode(user_prompt_ids)}")
-                print(f"Full Conversation Ids: {tokenizer.decode(full_convo_ids)}")
                 raise ValueError("No completion tokens to learn from!")
 
             assert len(full_convo_ids) == len(completion_mask), "Length Mismatch!"
@@ -120,7 +97,9 @@ class SFT:
             }
 
         dataset = dataset.map(tokenize, fn_kwargs={"tokenizer": self.tokenizer})
+        dataset = dataset.filter(lambda x: len(x["input_ids"]) > 0) 
         return dataset
+
     def _save_checkpoint(self, optimizer, scheduler, global_step, epoch, val_loss):
         os.makedirs(self.args.output_dir, exist_ok=True)
         model = self.model.module if hasattr(self.model, "module") else self.model
@@ -214,11 +193,8 @@ class SFT:
             for step, batch in enumerate(data_loader):
     
                 input_ids = batch["input_ids"].to(device)
-                print(f"input_ids shape: {input_ids.shape}")
-
                 attention_mask = batch["attention_mask"].to(device)
                 labels = batch["labels"].to(device)
-    
                 outputs = self.model(
                     input_ids=input_ids,
                     attn_mask=attention_mask,
@@ -233,7 +209,6 @@ class SFT:
                 window_total += total
     
                 loss = raw_loss / self.args.gradient_accumulation_steps
-                # loss.backward()
     
                 epoch_loss += raw_loss.item()
                 window_loss += raw_loss.item()
@@ -382,7 +357,6 @@ class SFT:
             if should_stop:
                 break
 
-    
         if is_main:
             model_to_save = (
                 self.model.module
