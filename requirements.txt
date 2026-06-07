@@ -1,8 +1,7 @@
 transformers
 datasets
 torch
-accelerate
-gradio
+pandas
 pydantic
 wandb
 triton; platform_system == "Linux"

@@ -42,3 +42,7 @@ class SFTConfig:
         default=False,
         metadata={"help": "reports logs to wandb"}
     )
+    distributed_strategy: str = field(
+        default="ddp", 
+        metadata={"help": "parallelism strategies"}
+    )
