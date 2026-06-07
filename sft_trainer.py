@@ -246,7 +246,7 @@ class SFT:
 
                 should_sync = is_accum_boundary or is_last_microbatch
                 
-                if use_distributed and not should_sync:
+                if strategy in ["ddp", "fsdp"] and not should_sync:
                     with self.model.no_sync():
                         loss.backward()
                 else:
@@ -266,7 +266,7 @@ class SFT:
                     global_step += 1
 
                     # FIX 3: reduce metrics across all ranks before logging
-                    if use_distributed == "ddp":
+                    if strategy in ["ddp", "fsdp"]:
                         correct_t = torch.tensor(window_correct, dtype=torch.float32, device=device)
                         total_t   = torch.tensor(window_total,   dtype=torch.float32, device=device)
                         loss_t    = torch.tensor(window_loss,    dtype=torch.float32, device=device)
@@ -299,7 +299,7 @@ class SFT:
                     window_correct, window_total = 0, 0
     
             # FIX 4: reduce epoch loss across ranks for accurate logging
-            if use_distributed:
+            if strategy in ["ddp", "fsdp"]:
                 epoch_loss_t = torch.tensor(epoch_loss, dtype=torch.float32, device=device)
                 dist.all_reduce(epoch_loss_t)
                 avg_epoch_loss = (epoch_loss_t / (num_microbatches * world_size)).item()
@@ -320,7 +320,7 @@ class SFT:
                         "epoch": epoch,
                     }
                 )
-            if use_distributed == "ddp":
+            if strategy in ["ddp", "fsdp"]:
                 dist.barrier()
             should_stop = False
     
@@ -369,14 +369,14 @@ class SFT:
                 if should_stop and self.args.report_to_wandb:
                     wandb.run.summary["early_stopping_epoch"] = epoch
                     wandb.finish()
-            if use_distributed == "ddp":
+            if strategy in ["ddp", "fsdp"]:
                 stop_flag = torch.tensor([int(should_stop)], device=device)
                 dist.broadcast(stop_flag, src=0)
                 should_stop = bool(stop_flag.item())
 
             # FIX 1 (continued): second barrier so everyone waits for rank 0
             # to finish eval + checkpoint before starting the next epoch
-            if use_distributed == "ddp":
+            if strategy in ["ddp", "fsdp"]:
                 dist.barrier()
 
             if should_stop:
