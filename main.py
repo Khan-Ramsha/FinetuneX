@@ -4,7 +4,7 @@ import pandas as pd
 from data_preprocessing import ChatMLPreprocessor
 from sft_config import SFTConfig
 from build_dataset import create_dataset
-from finetunex.distributed.ddp import ddp_setup
+from finetunex.distributed.setup import distributed_setup
 import wandb
 import argparse
 import torch
@@ -13,8 +13,8 @@ from torch.distributed import destroy_process_group
 
 def main(rank: int, world_size: int, model_name: str, dataset: str, training_args: SFTConfig):
     try: 
-        if training_args.distributed_strategy == "ddp":
-            ddp_setup(rank, world_size)
+        if training_args.distributed_strategy in ["ddp", "fsdp"]:
+            distributed_setup(rank, world_size)
     
         train_dataset, eval_dataset = create_dataset(dataset)
     
