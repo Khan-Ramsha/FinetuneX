@@ -73,7 +73,7 @@ class Qwen2Model(BaseModel):
         combined_mask = combined_mask & ~unhide_first
         
         for layer in self.layers:
-            hidden_states = checkpoint(layer, hidden_states, pos_emb, combined_mask, use_reentrant = False)
+            hidden_states = layer(hidden_states, pos_emb, combined_mask)
         hidden_states = self.norm(hidden_states)
         logits = self.lm_head(hidden_states)
 

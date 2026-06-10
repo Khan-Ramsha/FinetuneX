@@ -1,35 +1,25 @@
-""" Base class: every model inherits base class"""
+"""Base class: every model inherits base class"""
 import torch
 import torch.nn as nn
-from abc import ABC, abstractmethod
 
-class BaseModel(ABC, nn.Module):
-    def __init__(self, config, args = None):
+class BaseModel(nn.Module):
+    def __init__(self, config, args=None):
         super().__init__()
         self.config = config
         self.args = args
         self._build_model()
 
-    @abstractmethod
     def _build_model(self):
-        """"Initializes layers, embeddings."""
-        pass
-    
-    @abstractmethod
+        raise NotImplementedError(f"{self.__class__.__name__} must implement _build_model()")
+
     def decoder_layer(self, config, layer_idx) -> nn.Module:
-        """ Model specific decoder layer implementation"""
-        pass
+        raise NotImplementedError(f"{self.__class__.__name__} must implement decoder_layer()")
 
-    @abstractmethod
     def norm_layer(self, hidden_size, eps) -> nn.Module:
-        """Normalization Layer for model"""
-        pass
-    
-    @abstractmethod
-    def rotary_embedding(self, dim, base) -> nn.Module:
-        """" Positional Encoding"""
-        pass
+        raise NotImplementedError(f"{self.__class__.__name__} must implement norm_layer()")
 
-    @abstractmethod
-    def forward(self, input_ids, attention_mask = None, labels = None):
-        pass
+    def rotary_embedding(self, dim, base) -> nn.Module:
+        raise NotImplementedError(f"{self.__class__.__name__} must implement rotary_embedding()")
+
+    def forward(self, input_ids, attention_mask=None, labels=None):
+        raise NotImplementedError(f"{self.__class__.__name__} must implement forward()")
