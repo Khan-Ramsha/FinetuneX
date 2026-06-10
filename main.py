@@ -1,7 +1,5 @@
 from sft_trainer import SFT
 from data_collator import DataCollator
-import pandas as pd
-from data_preprocessing import ChatMLPreprocessor
 from sft_config import SFTConfig
 from build_dataset import create_dataset
 from finetunex.distributed.setup import distributed_setup
@@ -37,10 +35,9 @@ def main(rank: int, world_size: int, model_name: str, dataset: str, training_arg
             eval_dataset=tokenized_eval,
             rank=rank,
             world_size=world_size,
-            use_distributed=training_args.distributed_strategy
         )
     finally:
-        if args.distributed_strategy != "single":
+        if training_args.distributed_strategy != "single":
             destroy_process_group()
 
 if __name__ == "__main__":
@@ -52,7 +49,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size",type=int,   default=2)
     parser.add_argument("--grad_accum",type=int,   default=2)
     parser.add_argument("--output_dir",default="./finetuned")
-    parser.add_argument("--wandb",     action="store_true")
+    parser.add_argument("--wandb",  action="store_true")
     parser.add_argument("--distributed_strategy", default="single", choices=["single", "ddp","fsdp"])
     args = parser.parse_args()
 
