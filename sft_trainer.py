@@ -2,21 +2,17 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from utils import save_pretrained, set_seed, token_accuracy
+from utils import set_seed
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     get_cosine_schedule_with_warmup
 )
-import torch.distributed.checkpoint as dcp
-from finetunex.distributed.distributed_checkpoint import AppState
 from finetunex.models.qwen2.save_load import load_weights_into_qwen
 from finetunex.models.llama.save_load import load_weights_into_llama
 from finetunex.base.config import Config
-from torch.optim import AdamW
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-import os
+import os, json
 from evaluate import evaluate_model
 from early_stopping import EarlyStopping
 from sft_config import SFTConfig
@@ -103,35 +99,42 @@ class SFT:
         dataset = dataset.map(tokenize, fn_kwargs={"tokenizer": self.tokenizer})
         dataset = dataset.filter(lambda x: len(x["input_ids"]) > 0)
         return dataset
-
+    
     def _save_checkpoint(self, optimizer, scheduler, global_step, epoch, val_loss):
-        strategy = self.args.distributed_strategy
-        ckpt_dir = f"{self.args.output_dir}/checkpoint_epoch_{epoch}"
+        if self.rank != 0 and self.args.distributed_strategy != "fsdp":
+            return  # only rank 0 saves for ddp/single
 
-        if strategy == "fsdp":
-            dcp.save(
-                {"app": AppState(self.model, optimizer)},
-                checkpoint_id=ckpt_dir
+        ckpt_dir = f"{self.args.output_dir}/checkpoint_epoch_{epoch}"
+        os.makedirs(ckpt_dir, exist_ok=True)
+
+        if self.args.distributed_strategy == "fsdp":
+            from torch.distributed.checkpoint.state_dict import (
+                get_model_state_dict, get_optimizer_state_dict, StateDictOptions
             )
-            if self.rank == 0:
-                torch.save({
-                    "scheduler_state_dict": scheduler.state_dict(),
-                    "global_step": global_step,
-                    "epoch": epoch,
-                    "val_loss": val_loss,
-                }, f"{ckpt_dir}/training_state.pt")
+            opts = StateDictOptions(full_state_dict=True, cpu_offload=True)
+            model_state = get_model_state_dict(self.model, options=opts)      # collective
+            optim_state = get_optimizer_state_dict(self.model, optimizer, options=opts)  # collective
+            if self.rank != 0:
+                return  # non-rank-0 done after contributing to collective
         else:
-            os.makedirs(ckpt_dir, exist_ok=True)
-            model_to_save = self.model.module if hasattr(self.model, "module") else self.model
-            if self.rank == 0:
-                torch.save({
-                    "model_state_dict": model_to_save.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "scheduler_state_dict": scheduler.state_dict(),
-                    "global_step": global_step,
-                    "epoch": epoch,
-                    "val_loss": val_loss,
-                }, f"{ckpt_dir}/checkpoint.pt")
+            m = self.model.module if hasattr(self.model, "module") else self.model
+            model_state = m.state_dict()
+            optim_state = optimizer.state_dict()
+
+        # only rank 0 writes to disk
+        torch.save({
+            "model_state_dict": model_state,
+            "optimizer_state_dict": optim_state,
+            "scheduler_state_dict": scheduler.state_dict(),
+            "global_step": global_step,
+            "epoch": epoch,
+            "val_loss": val_loss,
+        }, f"{ckpt_dir}/checkpoint.pt")
+
+        # save config alongside for inference
+        config_dict = self.model.config.__dict__.copy()
+        with open(f"{ckpt_dir}/config.json", "w") as f:
+            json.dump(config_dict, f, indent=2)
 
     def train_model(
         self,
@@ -152,8 +155,8 @@ class SFT:
         if strategy == "ddp":
             self.model = DDP(self.model, device_ids=[rank])
         elif strategy == "fsdp":
-            for layer in self.model.layers:
-                fully_shard(layer)
+            for module in self.model.layers:
+                fully_shard(module)
             fully_shard(self.model)
 
         self.model.train()
@@ -204,7 +207,6 @@ class SFT:
                 data_loader.sampler.set_epoch(epoch)
 
             epoch_loss = 0.0
-            grad_norm = 0.0
             optimizer.zero_grad()
 
             for step, batch in enumerate(data_loader):
@@ -235,10 +237,6 @@ class SFT:
                     loss.backward()
 
                 if should_sync:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(
-                        self.model.parameters(),
-                        self.args.max_grad_norm,
-                    )
                     optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
@@ -275,17 +273,34 @@ class SFT:
             is_best = False
 
             if eval_dataset is not None:
-
                 if strategy == "fsdp":
-                    # all ranks run eval on the sharded model
-                    eval_metrics = evaluate_model(
-                        self.model,
-                        eval_dataset,
-                        data_collator,
-                        self.args.batch_size,
-                        device,
+                    eval_sampler = DistributedSampler(eval_dataset, shuffle=False)
+                    eval_loader = DataLoader(eval_dataset, batch_size=self.args.batch_size,
+                                            shuffle=False, collate_fn=data_collator, sampler=eval_sampler)
+                    eval_metrics = evaluate_model(self.model, eval_dataset, data_collator,
+                                                self.args.batch_size, device, eval_loader)
+                    loss_sum_t = torch.tensor(
+                        eval_metrics["total_loss_sum"],
+                        dtype=torch.float32,
+                        device=device,
                     )
-                    # evaluate_model runs on full dataset on every rank — no all_reduce needed
+
+                    tokens_t = torch.tensor(
+                        eval_metrics["total_tokens"],
+                        dtype=torch.float32,
+                        device=device,
+                    )
+
+                    dist.all_reduce(loss_sum_t)
+                    dist.all_reduce(tokens_t)
+
+                    eval_metrics["loss"] = (
+                        loss_sum_t / tokens_t.clamp(min=1)
+                    ).item()
+
+                    eval_metrics["perplexity"] = math.exp(
+                        min(eval_metrics["loss"], 709)
+                    )
 
                 elif is_main:
                     eval_model = self.model.module if hasattr(self.model, "module") else self.model
@@ -304,15 +319,13 @@ class SFT:
                     if is_best:
                         best_val_loss = eval_metrics["loss"]
                     print(
-                        f"  val_loss: {eval_metrics['loss']:.4f} | "
+                        f"val_loss: {eval_metrics['loss']:.4f} | "
                         f"val_ppl: {eval_metrics['perplexity']:.2f} | "
-                        f"val_acc: {eval_metrics['token_accuracy']:.4f}"
                     )
                     if self.args.report_to_wandb:
                         wandb.log({
                             "eval/avg_loss": eval_metrics["loss"],
                             "eval/perplexity": eval_metrics["perplexity"],
-                            "eval/token_acc": eval_metrics["token_accuracy"],
                         })
                     should_stop = early_stop.early_stopping(eval_metrics["loss"])
                     if should_stop and self.args.report_to_wandb:
@@ -337,18 +350,3 @@ class SFT:
 
             if should_stop:
                 break
-
-        # save final model weights after training loop ends
-        if strategy == "fsdp":
-            from torch.distributed.checkpoint.state_dict import get_model_state_dict, StateDictOptions
-            # collective — all ranks must call this
-            model_state = get_model_state_dict(
-                self.model,
-                options=StateDictOptions(full_state_dict=True, cpu_offload=True)
-            )
-            if self.rank == 0:
-                save_pretrained(self.args.output_dir, model_state, self.model.config)
-        else:
-            if self.rank == 0:
-                model_to_save = self.model.module if hasattr(self.model, "module") else self.model
-                save_pretrained(self.args.output_dir, model_to_save.state_dict(), model_to_save.config)
