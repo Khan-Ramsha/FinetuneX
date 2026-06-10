@@ -52,7 +52,7 @@ class SFT:
             load_weights_into_llama(self.model, config, hf_model_state_dict)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-            
+
     def prepare_dataset(self, dataset):
         def _apply_chat_template_ids(tokenizer, *args, **kwargs):
             """Return a plain list of token ids; newer transformers may return BatchEncoding."""
@@ -63,6 +63,7 @@ class SFT:
             if hasattr(ids, "tolist"):
                 ids = ids.tolist()
             return list(ids)
+
         def tokenize(example, tokenizer):
             MAXLEN = 512
             messages = example["messages"]
@@ -86,7 +87,7 @@ class SFT:
                 full_convo_ids.append(self.tokenizer.eos_token_id)
 
             if len(full_convo_ids) > MAXLEN:
-                return {"input_ids": [], "completion_mask": []}  # filtered after map
+                return {"input_ids": [], "completion_mask": []}
 
             completion_mask = [0] * len(user_prompt_ids) + [1] * (len(full_convo_ids) - len(user_prompt_ids))
 
@@ -100,7 +101,7 @@ class SFT:
             }
 
         dataset = dataset.map(tokenize, fn_kwargs={"tokenizer": self.tokenizer})
-        dataset = dataset.filter(lambda x: len(x["input_ids"]) > 0) 
+        dataset = dataset.filter(lambda x: len(x["input_ids"]) > 0)
         return dataset
 
     def _save_checkpoint(self, optimizer, scheduler, global_step, epoch, val_loss):
@@ -108,7 +109,6 @@ class SFT:
         ckpt_dir = f"{self.args.output_dir}/checkpoint_epoch_{epoch}"
 
         if strategy == "fsdp":
-            # ALL ranks participate — each saves its own shard
             dcp.save(
                 {"app": AppState(self.model, optimizer)},
                 checkpoint_id=ckpt_dir
@@ -155,7 +155,7 @@ class SFT:
             for layer in self.model.layers:
                 fully_shard(layer)
             fully_shard(self.model)
-        
+
         self.model.train()
 
         if strategy != "single":
@@ -174,44 +174,41 @@ class SFT:
                 shuffle=True,
                 collate_fn=data_collator,
             )
-    
+
         optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=self.args.learning_rate,
             weight_decay=self.args.weight_decay,
         )
-    
+
         steps_per_epoch = math.ceil(
             len(data_loader) / self.args.gradient_accumulation_steps
         )
         total_steps = steps_per_epoch * self.args.epochs
         warmup_steps = int(0.1 * total_steps)
-    
+
         scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps,
         )
-    
+
         early_stop = EarlyStopping()
         global_step = 0
         num_microbatches = len(data_loader)
         best_val_loss = float("inf")
-    
+
         for epoch in range(self.args.epochs):
-    
-            # set_epoch so each epoch gets different shuffling across GPUs
+
             if strategy != "single":
                 data_loader.sampler.set_epoch(epoch)
-    
-            epoch_loss = 0.0
-            window_loss, window_count = 0.0, 0
-            window_correct, window_total = 0.0, 0
 
+            epoch_loss = 0.0
+            grad_norm = 0.0
             optimizer.zero_grad()
-    
+
             for step, batch in enumerate(data_loader):
-    
+
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 labels = batch["labels"].to(device)
@@ -220,101 +217,56 @@ class SFT:
                     attn_mask=attention_mask,
                     labels=labels,
                 )
-    
+
                 raw_loss = outputs["loss"]
-                logits = outputs["logits"]
-    
-                correct, total = token_accuracy(logits, labels)
-                window_correct += correct
-                window_total += total
-    
                 loss = raw_loss / self.args.gradient_accumulation_steps
-    
                 epoch_loss += raw_loss.item()
-                window_loss += raw_loss.item()
-                window_count += 1
-    
+
                 is_accum_boundary = (
                     (step + 1) % self.args.gradient_accumulation_steps == 0
                 )
                 is_last_microbatch = (step + 1) == num_microbatches
-
                 should_sync = is_accum_boundary or is_last_microbatch
-                
+
                 if strategy == "ddp" and not should_sync:
                     with self.model.no_sync():
                         loss.backward()
                 else:
                     loss.backward()
-                    
+
                 if should_sync:
-    
                     grad_norm = torch.nn.utils.clip_grad_norm_(
                         self.model.parameters(),
                         self.args.max_grad_norm,
                     )
-    
                     optimizer.step()
                     scheduler.step()
                     optimizer.zero_grad()
-    
                     global_step += 1
 
-                    # FIX 3: reduce metrics across all ranks before logging
-                    if strategy in ["ddp", "fsdp"]:
-                        correct_t = torch.tensor(window_correct, dtype=torch.float32, device=device)
-                        total_t   = torch.tensor(window_total,   dtype=torch.float32, device=device)
-                        loss_t    = torch.tensor(window_loss,    dtype=torch.float32, device=device)
-                        dist.all_reduce(correct_t)
-                        dist.all_reduce(total_t)
-                        dist.all_reduce(loss_t)
-                        step_loss = (loss_t / max(window_count * world_size, 1)).item()
-                        step_acc  = (correct_t / total_t.clamp(min=1)).item()
-                    else:
-                        step_loss = window_loss / max(window_count, 1)
-                        step_acc  = window_correct / max(window_total, 1)
-                    # step_loss = window_loss / max(window_count, 1)
-                    # step_acc = window_correct / max(window_total, 1)
-    
-                    if is_main:
-                        if self.args.report_to_wandb:
-                            wandb.log(
-                                {
-                                    "train/step_loss": step_loss,
-                                    "train/step_acc": step_acc,
-                                }
-                            )
-                        else:
-                            print(
-                                f"[Rank {rank}] Step {global_step} | "
-                                f"loss: {step_loss:.4f} | acc: {step_acc:.4f}"
-                            )
-    
-                    window_loss, window_count = 0.0, 0
-                    window_correct, window_total = 0, 0
-    
-            # FIX 4: reduce epoch loss across ranks for accurate logging
+            # reduce epoch loss across ranks
             if strategy in ["ddp", "fsdp"]:
                 epoch_loss_t = torch.tensor(epoch_loss, dtype=torch.float32, device=device)
                 dist.all_reduce(epoch_loss_t)
                 avg_epoch_loss = (epoch_loss_t / (num_microbatches * world_size)).item()
             else:
                 avg_epoch_loss = epoch_loss / num_microbatches
-    
-            if is_main and self.args.report_to_wandb:
-                wandb.log(
-                    {
-                        "train/lr": scheduler.get_last_lr()[0],
+
+            if is_main:
+                print(
+                    f"Epoch {epoch+1}/{self.args.epochs} | "
+                    f"train_loss: {avg_epoch_loss:.4f} | "
+                )
+                if self.args.report_to_wandb:
+                    wandb.log({
+                        "train/epoch_loss": avg_epoch_loss,
                         "train/gpu_mem_gb": (
                             torch.cuda.memory_allocated() / 1e9
-                            if torch.cuda.is_available()
-                            else 0
+                            if torch.cuda.is_available() else 0
                         ),
                         "train/global_step": global_step,
-                        "train/epoch_loss": avg_epoch_loss,
                         "epoch": epoch,
-                    }
-                )
+                    })
 
             if strategy in ["ddp", "fsdp"]:
                 dist.barrier()
@@ -325,22 +277,17 @@ class SFT:
             if eval_dataset is not None:
 
                 if strategy == "fsdp":
-                    # All ranks run eval on the sharded model
+                    # all ranks run eval on the sharded model
                     eval_metrics = evaluate_model(
-                        self.model,          # sharded model, all ranks participate
+                        self.model,
                         eval_dataset,
                         data_collator,
                         self.args.batch_size,
                         device,
                     )
-                    # evaluate_model must all_reduce internally for FSDP,
-                    # OR you reduce here after:
-                    loss_t = torch.tensor(eval_metrics["loss"], device=device)
-                    dist.all_reduce(loss_t)
-                    eval_metrics["loss"] = (loss_t / world_size).item()
+                    # evaluate_model runs on full dataset on every rank — no all_reduce needed
 
                 elif is_main:
-                    # DDP/single: full model is on rank 0, eval normally
                     eval_model = self.model.module if hasattr(self.model, "module") else self.model
                     eval_metrics = evaluate_model(
                         eval_model,
@@ -352,11 +299,15 @@ class SFT:
 
                 self.model.train()
 
-                # Only rank 0 checks is_best and logs
                 if is_main:
                     is_best = eval_metrics["loss"] < best_val_loss
                     if is_best:
                         best_val_loss = eval_metrics["loss"]
+                    print(
+                        f"  val_loss: {eval_metrics['loss']:.4f} | "
+                        f"val_ppl: {eval_metrics['perplexity']:.2f} | "
+                        f"val_acc: {eval_metrics['token_accuracy']:.4f}"
+                    )
                     if self.args.report_to_wandb:
                         wandb.log({
                             "eval/avg_loss": eval_metrics["loss"],
@@ -368,7 +319,7 @@ class SFT:
                         wandb.run.summary["early_stopping_epoch"] = epoch
                         wandb.finish()
 
-            # Broadcast is_best and should_stop so all ranks agree
+            # broadcast is_best and should_stop so all ranks agree
             if strategy in ["ddp", "fsdp"]:
                 is_best_t = torch.tensor([int(is_best)], device=device)
                 dist.broadcast(is_best_t, src=0)
@@ -378,7 +329,6 @@ class SFT:
                 dist.broadcast(stop_flag, src=0)
                 should_stop = bool(stop_flag.item())
 
-            # All ranks call checkpoint together (dcp.save needs all ranks for FSDP)
             if is_best:
                 self._save_checkpoint(optimizer, scheduler, global_step, epoch, val_loss=best_val_loss)
 
@@ -388,17 +338,17 @@ class SFT:
             if should_stop:
                 break
 
-            if strategy == "fsdp":
-                from torch.distributed.checkpoint.state_dict import get_model_state_dict, StateDictOptions
-                # collective — all ranks must call this
-                model_state = get_model_state_dict(
-                    self.model,
-                    options=StateDictOptions(full_state_dict=True, cpu_offload=True)
-                )
-                if self.rank == 0:
-                    save_pretrained(self.args.output_dir, model_state, self.model.config)
-            else:
-                # DDP: all ranks have synced weights, just take rank 0
-                if self.rank == 0:
-                    model_to_save = self.model.module if hasattr(self.model, "module") else self.model
-                    save_pretrained(self.args.output_dir, model_to_save.state_dict(), model_to_save.config)
+        # save final model weights after training loop ends
+        if strategy == "fsdp":
+            from torch.distributed.checkpoint.state_dict import get_model_state_dict, StateDictOptions
+            # collective — all ranks must call this
+            model_state = get_model_state_dict(
+                self.model,
+                options=StateDictOptions(full_state_dict=True, cpu_offload=True)
+            )
+            if self.rank == 0:
+                save_pretrained(self.args.output_dir, model_state, self.model.config)
+        else:
+            if self.rank == 0:
+                model_to_save = self.model.module if hasattr(self.model, "module") else self.model
+                save_pretrained(self.args.output_dir, model_to_save.state_dict(), model_to_save.config)
