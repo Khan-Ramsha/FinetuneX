@@ -6,6 +6,7 @@ import torch
 from utils import from_pretrained
 from finetunex.text_generation.generate import generate
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import argparse
 
 def infer(prompt, model_path, model_name):
     print("STARTING INFERENCE")
@@ -104,3 +105,12 @@ def infer_base(prompt, model_path):
 
     print(f"\nFull response:\n{full_response}")
     return full_response
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model",     default="Qwen2.5-0.5B")
+    parser.add_argument("--model_path", default="./finetuned/checkpoint_epoch_3")
+    parser.add_argument("--prompt",     required=True)
+    args = parser.parse_args()
+    result = infer(args.prompt, args.checkpoint, args.model)
+    print(result)
