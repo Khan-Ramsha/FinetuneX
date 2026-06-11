@@ -108,9 +108,9 @@ def infer_base(prompt, model_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model",     default="Qwen2.5-0.5B")
-    parser.add_argument("--model_path", default="./finetuned/checkpoint_epoch_3")
-    parser.add_argument("--prompt",     required=True)
+    parser.add_argument("--model", default="Qwen2.5-0.5B")
+    parser.add_argument("--model_path", default="./finetuned/checkpoint_epoch_0")
+    parser.add_argument("--prompt", required=True)
     args = parser.parse_args()
     result = infer(args.prompt, args.model_path, args.model)
     print(result)
