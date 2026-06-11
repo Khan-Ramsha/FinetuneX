@@ -23,6 +23,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed._composable.fsdp import fully_shard
 import torch.distributed as dist
+from utils import save_pretrained
 
 class SFT:
     def __init__(self, model: str, pad_token: int, args: SFTConfig, rank: int = 0):
@@ -122,19 +123,16 @@ class SFT:
             optim_state = optimizer.state_dict()
 
         # only rank 0 writes to disk
-        torch.save({
-            "model_state_dict": model_state,
-            "optimizer_state_dict": optim_state,
-            "scheduler_state_dict": scheduler.state_dict(),
-            "global_step": global_step,
-            "epoch": epoch,
-            "val_loss": val_loss,
-        }, f"{ckpt_dir}/checkpoint.pt")
-
-        # save config alongside for inference
-        config_dict = self.model.config.__dict__.copy()
-        with open(f"{ckpt_dir}/config.json", "w") as f:
-            json.dump(config_dict, f, indent=2)
+        """ Uncomment below code to save checkpoints for resuming training """
+        # torch.save({
+        #     "model_state_dict": model_state,
+        #     "optimizer_state_dict": optim_state,
+        #     "scheduler_state_dict": scheduler.state_dict(),
+        #     "global_step": global_step,
+        #     "epoch": epoch,
+        #     "val_loss": val_loss,
+        # }, f"{ckpt_dir}/checkpoint.pt")
+        save_pretrained(ckpt_dir, model_state, self.model.config)
 
     def train_model(
         self,

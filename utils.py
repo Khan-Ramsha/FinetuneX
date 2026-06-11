@@ -36,8 +36,11 @@ def from_pretrained(model_path): #load the model after finetuning
     else:
         raise ValueError(f"Unknown model type: {config.model_type}")
     # load weights
-    weights_path = os.path.join(model_path, "model.bin")
-    state_dict = torch.load(weights_path, weights_only=True)
+    weights_path = os.path.join(model_path, "checkpoint.pt")
+    if not os.path.join(weights_path):
+         weights_path = os.path.join(model_path, "model.bin")
+    ckpt = torch.load(weights_path, weights_only=True)
+    state_dict = ckpt.get("model_state_dict", ckpt)
     model.load_state_dict(state_dict, strict=True)
     return model
 

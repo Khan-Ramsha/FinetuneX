@@ -8,6 +8,7 @@ import argparse
 import torch
 import torch.multiprocessing as mp
 from torch.distributed import destroy_process_group
+from inference import infer
 
 def main(rank: int, world_size: int, model_name: str, dataset: str, training_args: SFTConfig):
     try: 
@@ -36,6 +37,11 @@ def main(rank: int, world_size: int, model_name: str, dataset: str, training_arg
             rank=rank,
             world_size=world_size,
         )
+        if rank == 0:
+            model_path = f"{training_args.output_dir}/checkpoint_epoch_{training_args.epoch-1}"
+            prompt = input("Enter ")
+            result = infer(prompt, model_path, model_name)
+            print("f\n== Model Response == \n {result}")
     finally:
         if training_args.distributed_strategy != "single":
             destroy_process_group()
