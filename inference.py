@@ -112,5 +112,5 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", default="./finetuned/checkpoint_epoch_3")
     parser.add_argument("--prompt",     required=True)
     args = parser.parse_args()
-    result = infer(args.prompt, args.checkpoint, args.model)
+    result = infer(args.prompt, args.model_path, args.model)
     print(result)
