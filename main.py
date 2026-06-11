@@ -37,11 +37,6 @@ def main(rank: int, world_size: int, model_name: str, dataset: str, training_arg
             rank=rank,
             world_size=world_size,
         )
-        if rank == 0:
-            model_path = f"{training_args.output_dir}/checkpoint_epoch_{training_args.epochs-1}"
-            prompt = input("Enter ")
-            result = infer(prompt, model_path, model_name)
-            print("f\n== Model Response == \n {result}")
     finally:
         if training_args.distributed_strategy != "single":
             destroy_process_group()
@@ -74,3 +69,7 @@ if __name__ == "__main__":
         mp.spawn(main, args=(world_size, args.model, args.dataset, training_args), nprocs=world_size)
     else:
         main(rank=0, world_size=1, model_name=args.model, dataset= args.dataset, training_args=training_args)
+    model_path = f"{training_args.output_dir}/checkpoint_epoch_{training_args.epochs-1}"
+    prompt = input("Enter the prompt: ")
+    result = infer(prompt, model_path, args.model)
+    print(f"\n== Model Response == \n {result}")
