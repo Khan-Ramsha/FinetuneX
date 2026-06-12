@@ -19,11 +19,11 @@ class SFTConfig:
         metadata={"help":"prevents overfitting"}  
     ) 
     gradient_accumulation_steps: int = field(
-        default=8,
+        default=4,
         metadata={"help":"number of steps to accumulate gradients before updating parameters"}
     )
     batch_size: int = field(
-        default=4,
+        default=1,
         metadata={"help":"number of samples to process in each batch"}
     )
     use_flash_attn: bool = field(
