@@ -115,11 +115,12 @@ class SFT:
             opts = StateDictOptions(full_state_dict=True, cpu_offload=True)
             model_state = get_model_state_dict(self.model, options=opts)      # collective
             optim_state = get_optimizer_state_dict(self.model, optimizer, options=opts)  # collective
+            base_model = self.model
             if self.rank != 0:
                 return  # non-rank-0 done after contributing to collective
         else:
-            m = self.model.module if hasattr(self.model, "module") else self.model
-            model_state = m.state_dict()
+            base_model = self.model.module if hasattr(self.model, "module") else self.model
+            model_state = base_model.state_dict()
             optim_state = optimizer.state_dict()
 
         # only rank 0 writes to disk
@@ -132,7 +133,7 @@ class SFT:
         #     "epoch": epoch,
         #     "val_loss": val_loss,
         # }, f"{ckpt_dir}/checkpoint.pt")
-        save_pretrained(ckpt_dir, model_state, self.model.config)
+        save_pretrained(ckpt_dir, model_state, base_model.config)
 
     def train_model(
         self,
