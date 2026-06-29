@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class DPOConfig:
-    # ── Model ─────────────────────────────────────────────────────────────
     model_name: str = field(
         default="Qwen2.5-0.5B",
         metadata={"help": "Architecture to load; one of 'Qwen2.5-0.5B' | 'Llama-3.2-1B'"},
@@ -55,14 +54,11 @@ class DPOConfig:
             )
         },
     )
-
-    # ── Dataset ────────────────────────────────────────────────────────────
     max_length: int = field(
         default=512,
         metadata={"help": "Maximum token length for both chosen & rejected sequences."},
     )
 
-    # ── Optimisation ───────────────────────────────────────────────────────
     use_flash_attn: bool = field(
         default=False,
         metadata={"help":"use flash attention triton kernels"}
@@ -98,7 +94,6 @@ class DPOConfig:
         metadata={"help": "Gradient clipping max-norm."},
     )
 
-    # ── I/O ────────────────────────────────────────────────────────────────
     output_dir: str = field(
         default="./dpo_results",
         metadata={"help": "Directory to save model checkpoints and final weights."},
@@ -107,4 +102,7 @@ class DPOConfig:
         default=False,
         metadata={"help": "Stream training metrics to Weights & Biases."},
     )
-    
+    distributed_strategy: str = field(
+        default="ddp", 
+        metadata={"help": "parallelism strategies"}
+    )

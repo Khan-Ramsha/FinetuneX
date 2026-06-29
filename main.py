@@ -82,7 +82,7 @@ if __name__ == "__main__":
             distributed_strategy=args.distributed_strategy
         )
     elif args.post_training == "dpo":
-        training_args = DPOConfig(model_name="Qwen2.5-0.5B", beta=0.1, epochs=3)
+        training_args = DPOConfig(model_name="Qwen2.5-0.5B", beta=0.1, epochs=3, distributed_strategy=args.distributed_strategy)
         
     world_size = max(torch.cuda.device_count(), 1)
     if training_args.distributed_strategy in ["ddp", "fsdp"] and world_size > 1:
