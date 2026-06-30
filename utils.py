@@ -7,6 +7,7 @@ import os
 import json
 from finetunex.base.config import Config
 from sft_config import SFTConfig
+from dpo_config import DPOConfig
 
 def set_seed(seed):
     random.seed(seed)
@@ -23,12 +24,15 @@ def save_pretrained(outputdir, model_state_dict, config):
     with open(os.path.join(outputdir, "config.json"), "w") as f:
         json.dump(config_dict, f, indent=2)
 
-def from_pretrained(model_path): #load the model after finetuning
+def from_pretrained(model_path, post_training): #load the model after finetuning
     config_path = os.path.join(model_path, "config.json")
     with open(config_path, "r") as f:
         config_dict = json.load(f)
     config = Config.from_dict(config_dict)
-    arg = SFTConfig()
+    if post_training == "sft":
+        arg = SFTConfig()
+    elif post_training == "dpo"
+        arg = DPOConfig()
     if config.model_type == "qwen2":    
         model = Qwen2Model(config, args = arg)  #Model gets initialized
     elif config.model_type == "llama":

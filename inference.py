@@ -8,9 +8,9 @@ from finetunex.text_generation.generate import generate
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import argparse
 
-def infer(prompt, model_path, model_name):
+def infer(prompt, model_path, model_name, post_training):
     print("STARTING INFERENCE")
-    model = from_pretrained(model_path)
+    model = from_pretrained(model_path, post_training)
     
     if model_name == "Qwen2.5-0.5B":
         tokenizer = AutoTokenizer.from_pretrained("Qwen/" + model_name)  
@@ -110,7 +110,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="Qwen2.5-0.5B")
     parser.add_argument("--model_path", default="./finetuned/checkpoint_epoch_0")
+    parser.add_argument("--post_training", default="sft", choices=["sft","dpo"])
     parser.add_argument("--prompt", required=True)
     args = parser.parse_args()
-    result = infer(args.prompt, args.model_path, args.model)
+    result = infer(args.prompt, args.model_path, args.model. args.post_training)
     print(result)
