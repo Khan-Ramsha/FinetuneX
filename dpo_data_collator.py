@@ -1,7 +1,7 @@
 import torch
 
 class DataCollatorForDPO:
-    def __init__(self, pad_token_id, pad_to_multiple_of=128):
+    def __init__(self, pad_token_id, pad_to_multiple_of=8):
         self.pad_token_id = pad_token_id
         self.pad_to_multiple = pad_to_multiple_of
 

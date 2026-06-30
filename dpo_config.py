@@ -80,7 +80,7 @@ class DPOConfig:
         metadata={"help": "Number of full passes through the preference dataset."},
     )
     batch_size: int = field(
-        default=4,
+        default=2,
         metadata={"help": "Per-device micro-batch size."},
     )
     gradient_accumulation_steps: int = field(
