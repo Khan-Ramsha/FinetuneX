@@ -33,7 +33,7 @@ def infer(prompt, model_path, model_name, post_training):
     
     inputs = tokenizer(chat_input, return_tensors="pt").to(device)
     prompt = inputs["input_ids"]
-    max_new_tokens = model.config.max_position_embeddings - prompt.size(1)
+    max_new_tokens = min(model.config.max_position_embeddings - prompt.size(1), 400)
     
     with torch.no_grad():
         generated_tokens = generate(
@@ -113,5 +113,5 @@ if __name__ == "__main__":
     parser.add_argument("--post_training", default="sft", choices=["sft","dpo"])
     parser.add_argument("--prompt", required=True)
     args = parser.parse_args()
-    result = infer(args.prompt, args.model_path, args.model. args.post_training)
+    result = infer(args.prompt, args.model_path, args.model, args.post_training)
     print(result)

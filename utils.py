@@ -31,7 +31,7 @@ def from_pretrained(model_path, post_training): #load the model after finetuning
     config = Config.from_dict(config_dict)
     if post_training == "sft":
         arg = SFTConfig()
-    elif post_training == "dpo"
+    elif post_training == "dpo":
         arg = DPOConfig()
     if config.model_type == "qwen2":    
         model = Qwen2Model(config, args = arg)  #Model gets initialized
