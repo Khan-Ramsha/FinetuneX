@@ -33,7 +33,7 @@ class DataCollatorForDPO:
                 mask[i, :s.size(0)] = 1
             return mask
 
-        return {
+        result = {
             "chosen": pad_seq(chosen_ids, self.pad_token_id),
             "rejected": pad_seq(rejected_ids,  self.pad_token_id),
             "chosen_mask": pad_seq(chosen_masks, 0),
@@ -41,3 +41,12 @@ class DataCollatorForDPO:
             "chosen_attention_mask": make_attn_mask(chosen_ids),    
             "rejected_attention_mask": make_attn_mask(rejected_ids),
         }
+        if "ref_chosen_logps" in batch[0]:
+            result["ref_chosen_logps"] = torch.tensor(
+                [e["ref_chosen_logps"] for e in batch], dtype=torch.float32
+            )
+            result["ref_rejected_logps"] = torch.tensor(
+                [e["ref_rejected_logps"] for e in batch], dtype=torch.float32
+            )
+
+        return result

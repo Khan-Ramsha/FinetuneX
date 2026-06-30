@@ -308,7 +308,14 @@ class DPOTrainer:
             shuffle=True,
             collate_fn=collator,
         )
+        train_dataset.attach_ref_logps(self.ref_model, collator, self.args.batch_size, device)
+        if eval_dataset is not None:
+            eval_dataset.attach_ref_logps(self.ref_model, collator, self.args.batch_size, device)
 
+        self.ref_model.to("cpu")
+        del self.ref_model
+        torch.cuda.empty_cache()
+        self.ref_model = None  # mark as precomputed mode
         # Optimiser & LR schedule
         optimizer = AdamW(
             self.model.parameters(),
@@ -374,14 +381,17 @@ class DPOTrainer:
                     self.model, rejected, rejected_attn_mask, rejected_mask
                 )
 
-                with torch.no_grad():
-                    ref_chosen_logps = _response_log_probs(
-                        self.ref_model, chosen, chosen_attn_mask, chosen_mask
-                    )
-                    ref_rejected_logps = _response_log_probs(
-                        self.ref_model, rejected, rejected_attn_mask, rejected_mask
-                    )
-
+                if self.ref_model is None:
+                    ref_chosen_logps = batch["ref_chosen_logps"].to(device)
+                    ref_rejected_logps = batch["ref_rejected_logps"].to(device)
+                else:
+                    with torch.no_grad():
+                        ref_chosen_logps = _response_log_probs(
+                            self.ref_model, chosen, chosen_attn_mask, chosen_mask
+                        )
+                        ref_rejected_logps = _response_log_probs(
+                            self.ref_model, rejected, rejected_attn_mask, rejected_mask
+                        )
                 # DPO loss
                 loss, chosen_rewards, rejected_rewards = _dpo_loss(
                     policy_chosen_logps,
@@ -548,13 +558,17 @@ class DPOTrainer:
             policy_rejected_logps = _response_log_probs(
                 self.model, rejected, rejected_attn_mask, rejected_mask
             )
-            ref_chosen_logps = _response_log_probs(
-                self.ref_model, chosen, chosen_attn_mask, chosen_mask
-            )
-            ref_rejected_logps = _response_log_probs(
-                self.ref_model, rejected, rejected_attn_mask, rejected_mask
-            )
-
+           
+            if self.ref_model is None:
+                ref_chosen_logps = batch["ref_chosen_logps"].to(device)
+                ref_rejected_logps = batch["ref_rejected_logps"].to(device)
+            else:
+                ref_chosen_logps = _response_log_probs(
+                    self.ref_model, chosen, chosen_attn_mask, chosen_mask
+                )
+                ref_rejected_logps = _response_log_probs(
+                    self.ref_model, rejected, rejected_attn_mask, rejected_mask
+                )
             loss, c_rewards, r_rewards = _dpo_loss(
                 policy_chosen_logps,
                 policy_rejected_logps,

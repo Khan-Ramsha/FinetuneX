@@ -8,7 +8,6 @@ class PreferenceDPODataset(Dataset):
     """
     def __init__(self, data, tokenizer, max_length=512):
         self.encoded = []
-
         def _apply_chat_template_ids(tokenizer, messages, **kwargs):
             """Reuse the exact same helper from sft_trainer.py"""
             out = tokenizer.apply_chat_template(messages, **kwargs)
@@ -75,3 +74,37 @@ class PreferenceDPODataset(Dataset):
 
     def __len__(self):
         return len(self.encoded)
+
+    @torch.no_grad()
+    def attach_ref_logps(self, ref_model, collator, batch_size, device):
+        from torch.utils.data import DataLoader
+        from dpo_trainer import _response_log_probs
+
+        loader = DataLoader(self, batch_size=batch_size, shuffle=False, collate_fn=collator)
+
+        ref_model.to(device)
+        ref_model.eval()
+
+        all_chosen_logps = []
+        all_rejected_logps = []
+
+        for batch in loader:
+            chosen = batch["chosen"].to(device)
+            rejected = batch["rejected"].to(device)
+            chosen_mask = batch["chosen_mask"].to(device)
+            rejected_mask = batch["rejected_mask"].to(device)
+            chosen_attn = batch["chosen_attention_mask"].to(device)
+            rejected_attn = batch["rejected_attention_mask"].to(device)
+
+            chosen_logp = _response_log_probs(ref_model, chosen, chosen_attn, chosen_mask)
+            rejected_logp = _response_log_probs(ref_model, rejected, rejected_attn, rejected_mask)
+
+            all_chosen_logps.append(chosen_logp.cpu())
+            all_rejected_logps.append(rejected_logp.cpu())
+
+        all_chosen_logps = torch.cat(all_chosen_logps)
+        all_rejected_logps = torch.cat(all_rejected_logps)
+
+        for i, entry in enumerate(self.encoded):
+            entry["ref_chosen_logps"] = all_chosen_logps[i].item()
+            entry["ref_rejected_logps"] = all_rejected_logps[i].item()
