@@ -53,3 +53,10 @@ def token_accuracy(logits, labels):
     total = mask.sum().item()
 
     return correct, total
+
+def selective_log_softmax(logits, labels):
+    logits = logits.to(torch.float32)
+    selected_logits = torch.gather(logits, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
+    logsumexp_values = torch.stack([torch.logsumexp(lg, dim=-1) for lg in logits])
+    per_token_logps = selected_logits - logsumexp_values
+    return per_token_logps

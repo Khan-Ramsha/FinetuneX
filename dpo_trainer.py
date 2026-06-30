@@ -31,9 +31,8 @@ from transformers import (
     AutoTokenizer,
     get_cosine_schedule_with_warmup,
 )
-
 from dpo_config import DPOConfig
-from utils import save_pretrained, set_seed
+from utils import save_pretrained, set_seed,selective_log_softmax
 try:
     import wandb
 
@@ -126,17 +125,7 @@ def _response_log_probs(
     shift_labels = input_ids[:, 1:]  # [B, L-1]
     shift_mask = response_mask[:, 1:]  # [B, L-1]  shifted response mask
 
-    # Token-level log-probabilities via log-softmax
-    log_probs = F.log_softmax(shift_logits, dim=-1)  # [B, L-1, V]
-
-    # Gather the log-prob of the actual next token
-    token_log_probs = log_probs.gather(
-        dim=-1,
-        index=shift_labels.unsqueeze(-1),
-    ).squeeze(
-        -1
-    )  # [B, L-1]
-
+    token_log_probs = selective_log_softmax(shift_logits,shift_labels)
     masked_log_probs = token_log_probs * shift_mask.float()  # [B, L-1]
     return masked_log_probs.sum(dim=-1)  # [B]
 
